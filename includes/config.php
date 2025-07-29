@@ -11,7 +11,7 @@ if (session_status() === PHP_SESSION_NONE) {
 // Central DB config
 $host = 'localhost';
 $user = 'shivendra';
-$password = '24199319@Shiv';
+$password = 'Shiv@24199319bds';
 $central_db = 'softgen_db_central';
 
 // Connect to central DB

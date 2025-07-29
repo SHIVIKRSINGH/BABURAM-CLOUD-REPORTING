@@ -100,7 +100,7 @@ $stmt = $branch_db->prepare("
 ");
 $stmt->bind_param("ssssss", $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to);
 $stmt->execute();
-$summary = $stmt->get_result()->fetch_assoc();
+$summary = $stmt->get_result()->fetch_assoc();  
 
 $total_sales = $summary['total_sales'];
 $total_returns = $summary['total_returns'];

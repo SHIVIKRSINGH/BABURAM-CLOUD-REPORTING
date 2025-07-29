@@ -1,7 +1,7 @@
 <?php
 function getBranchConnection($branch_id)
 {
-    $central = new mysqli('localhost', 'shivendra', '24199319@Shiv', 'softgen_db_central');
+    $central = new mysqli('localhost', 'shivendra', 'Shiv@24199319bds', 'softgen_db_central');
     if ($central->connect_error) {
         die("❌ Central DB connection failed: " . $central->connect_error);
     }
