@@ -1,0 +1,11 @@
+# Block direct access to config.php
+<Files "config.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Optional: Protect includes too
+<Directory "includes">
+    Order allow,deny
+    Deny from all
+</Directory>
