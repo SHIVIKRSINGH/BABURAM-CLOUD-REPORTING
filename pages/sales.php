@@ -62,6 +62,17 @@ if ($stmt = $branch_db->prepare("SELECT SUM(net_amt_after_disc) as total FROM t_
     $total = $totalRow['total'] ?? 0;
     $stmt->close();
 }
+
+// 🏢 Branch list
+$branches = [];
+if (strtolower($role_name) === 'admin') {
+    $res = $con->query("SELECT branch_id FROM m_branch_sync_config");
+    while ($row = $res->fetch_assoc()) {
+        $branches[] = $row['branch_id'];
+    }
+} else {
+    $branches[] = $session_branch;
+}
 ?>
 
 <!DOCTYPE html>
@@ -81,11 +92,11 @@ if ($stmt = $branch_db->prepare("SELECT SUM(net_amt_after_disc) as total FROM t_
 
         <form method="get" class="row g-3 mb-4">
             <div class="col-sm-6 col-md-3">
-                <label for="branch">Branch</label>
-                <select name="branch" id="branch" class="form-select">
-                    <option value="SHASHI-ND" <?= $branch === 'SHASHI-ND' ? 'selected' : '' ?>>SHASHI-ND</option>
-                    <option value="SHIVI-ND" <?= $branch === 'SHIVI-ND' ? 'selected' : '' ?>>SHIVI-ND</option>
-                    <!-- Add more branches here -->
+                <label>Branch</label>
+                <select name="branch" class="form-select" <?= strtolower($role_name) !== 'admin' ? 'disabled' : '' ?>>
+                    <?php foreach ($branches as $b): ?>
+                        <option value="<?= $b ?>" <?= $b === $selected_branch ? 'selected' : '' ?>><?= $b ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-3">
