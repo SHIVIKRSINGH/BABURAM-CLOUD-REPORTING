@@ -120,7 +120,7 @@ $stmt->close();
 <body class="bg-light">
     <div class="container my-5" id="grn-section">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="mb-0">📦 Item Wise Sale History (GRN)</h3>
+            <h3 class="mb-0">📦 Item Wise Sale History</h3>
             <div class="action-buttons no-print">
                 <button class="btn btn-primary btn-sm" onclick="printFull()">🖨️ Print</button>
                 <button class="btn btn-danger btn-sm" onclick="downloadPDF()">📄 PDF</button>
