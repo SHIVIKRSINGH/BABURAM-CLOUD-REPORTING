@@ -54,7 +54,7 @@ $to   = $branch_db->real_escape_string($to);
 $stmt = $branch_db->prepare("
     SELECT 
     A.invoice_no,
-    A.invoice_dt,
+    date(A.invoice_dt) as invoice_dt,
     A.cust_id,
     C.cust_name,
     B.item_id,
