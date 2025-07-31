@@ -174,7 +174,7 @@ if (strtolower($role_name) === 'admin') {
                         <td><?= number_format($row['net_qty'], 2) ?></td>
                         <td><?= number_format($row['net_amt_final'], 2) ?></td>
                         <td>
-                            <a href="pur_history_view.php?item_id=<?= urlencode($row['item_id']) ?>&branch_id=<?= urlencode($branch) ?>&from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>" class="btn btn-sm btn-outline-primary" title="View History Details">
+                            <a href="pur_history_view.php?item_id=<?= urlencode($row['item_id']) ?>&from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>" class="btn btn-sm btn-outline-primary" title="View History Details">
                                 🔍 View
                             </a>
                         </td>

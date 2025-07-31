@@ -209,7 +209,7 @@ if (strtolower($role_name) === 'admin') {
                         <td><?= number_format($row['pur_amt'], 2) ?></td>
                         <td><?= is_null($row['margin_percent']) ? '-' : number_format($row['margin_percent'], 2) ?>%</td>
                         <td>
-                            <a href="sale_history_view.php?item_id=<?= urlencode($row['item_id']) ?>&branch_id=<?= urlencode($branch) ?>&from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>" class="btn btn-sm btn-outline-primary" title="View History Details">
+                            <a href="sale_history_view.php?item_id=<?= urlencode($row['item_id']) ?>&from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>" class="btn btn-sm btn-outline-primary" title="View History Details">
                                 🔍 View
                             </a>
                         </td>
