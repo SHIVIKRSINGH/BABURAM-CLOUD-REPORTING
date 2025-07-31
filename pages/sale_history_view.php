@@ -13,8 +13,8 @@ $to = $_GET['to'] ?? date('Y-m-d');
 
 
 
-if (!$receipt_id) {
-    echo "<div class='alert alert-danger'>Missing receipt ID.</div>";
+if (!$item_id) {
+    echo "<div class='alert alert-danger'>Missing Item ID.</div>";
     exit;
 }
 
