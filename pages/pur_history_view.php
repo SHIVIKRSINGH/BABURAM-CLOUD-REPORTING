@@ -53,25 +53,27 @@ $to   = $branch_db->real_escape_string($to);
 // Get GRN header
 $stmt = $branch_db->prepare("
     SELECT 
-    A.invoice_no,
-    date(A.invoice_dt) as invoice_dt,
-    A.cust_id,
-    C.cust_name,
+    A.receipt_id,
+    date(A.receipt_date) as receipt_dt,
+    A.supp_id,
+    C.supp_name,
     B.item_id,
     M.item_desc AS item_name,
     B.qty,
-    B.sale_price,
+    B.pur_rate,
     B.disc_per,
-    B.sale_tax_per AS vat_per,
-    B.sale_tax_amt AS vat_amt,
+    B.vat_per,
+    B.vat_amt,
+    B.net_rate,
     B.net_amt,
-    B.mrp
-FROM t_invoice_hdr A
-JOIN t_invoice_det B ON A.invoice_no = B.invoice_no
-LEFT JOIN m_customer C ON A.cust_id = C.cust_id
+    B.mrp,
+    B.sales_price,
+FROM t_receipt_hdr A
+JOIN t_receipt_det B ON A.receipt_id = B.receipt_id
+LEFT JOIN m_supplier C ON A.supp_id = C.supp_id
 LEFT JOIN m_item_hdr M ON B.item_id = M.item_id
-WHERE A.invoice_dt BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d') and M.item_id=?
-ORDER BY A.invoice_no desc;
+WHERE A.receipt_date BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d') and M.item_id=?
+ORDER BY A.receipt_id desc;
 
 ");
 $stmt->bind_param("sss", $from, $to, $item_id);
@@ -88,7 +90,7 @@ $stmt->close();
 <html>
 
 <head>
-    <title>ITEM WISE SALE HISTORY View</title>
+    <title>ITEM WISE PURCHASE HISTORY View</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .action-buttons {
@@ -120,7 +122,7 @@ $stmt->close();
 <body class="bg-light">
     <div class="container my-5" id="grn-section">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="mb-0">📦 Item Wise Sale History</h3>
+            <h3 class="mb-0">📦 Item Wise Purchase History</h3>
             <div class="action-buttons no-print">
                 <button class="btn btn-primary btn-sm" onclick="printFull()">🖨️ Print</button>
                 <button class="btn btn-danger btn-sm" onclick="downloadPDF()">📄 PDF</button>
@@ -142,19 +144,21 @@ $stmt->close();
                     <thead class="table-dark text-center">
                         <tr>
                             <th>Sl No.</th>
-                            <th>Invoice No.</th>
-                            <th>Invoice Date</th>
-                            <th>Cust Id</th>
-                            <th>Cust Name</th>
+                            <th>Receipt No.</th>
+                            <th>Receipt Date</th>
+                            <th>Supp Id</th>
+                            <th>Supp Name</th>
                             <th>Item Id</th>
                             <th>Item Name</th>
                             <th>Qty</th>
-                            <th>MRP</th>
-                            <th>Sales Price</th>
+                            <th>Pur. Rate</th>
                             <th>Disc Per</th>
                             <th>Vat Per</th>
                             <th>Vat Amt</th>
+                            <th>Net Rate</th>
                             <th>Net Amt</th>
+                            <th>MRP</th>
+                            <th>Sales Price</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -162,19 +166,21 @@ $stmt->close();
                         foreach ($items as $row): ?>
                             <tr class="text-center">
                                 <td><?= $i++ ?></td>
-                                <td class="text-start"><?= htmlspecialchars($row['invoice_no']) ?></td>
-                                <td><?= $row['invoice_dt'] ?></td>
-                                <td><?= $row['cust_id'] ?></td>
-                                <td><?= $row['cust_name'] ?></td>
+                                <td class="text-start"><?= htmlspecialchars($row['receipt_no']) ?></td>
+                                <td><?= $row['receipt_dt'] ?></td>
+                                <td><?= $row['supp_id'] ?></td>
+                                <td><?= $row['supp_name'] ?></td>
                                 <td><?= $row['item_id'] ?></td>
                                 <td><?= $row['item_name'] ?></td>
                                 <td><?= $row['qty'] ?></td>
-                                <td><?= number_format($row['mrp'], 2) ?></td>
-                                <td><?= number_format($row['sale_price'], 2) ?></td>
+                                <td><?= number_format($row['pur_rate'], 2) ?></td>
                                 <td><?= number_format($row['disc_per'], 2) ?></td>
                                 <td><?= number_format($row['vat_per'], 2) ?></td>
                                 <td><?= number_format($row['vat_amt'], 2) ?></td>
+                                <td><?= number_format($row['net_rate'], 2) ?></td>
                                 <td><?= number_format($row['net_amt'], 2) ?></td>
+                                <td><?= number_format($row['mrp'], 2) ?></td>
+                                <td><?= number_format($row['sale_price'], 2) ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
