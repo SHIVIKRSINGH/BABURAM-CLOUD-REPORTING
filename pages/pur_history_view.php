@@ -166,7 +166,7 @@ $stmt->close();
                         foreach ($items as $row): ?>
                             <tr class="text-center">
                                 <td><?= $i++ ?></td>
-                                <td class="text-start"><?= $row['receipt_no'] ?></td>
+                                <td class="text-start"><?= $row['receipt_id'] ?></td>
                                 <td><?= $row['receipt_dt'] ?></td>
                                 <td><?= $row['supp_id'] ?></td>
                                 <td><?= $row['supp_name'] ?></td>
