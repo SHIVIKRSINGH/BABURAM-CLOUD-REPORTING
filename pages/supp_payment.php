@@ -83,7 +83,25 @@ if (strtolower($role_name) === 'admin') {
     <title>Payment Report</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+
 </head>
+
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+<script>
+    $(function() {
+        $("#supplier_search").autocomplete({
+            source: "supplier_search.php",
+            minLength: 2,
+            select: function(event, ui) {
+                $("#supplier_search").val(ui.item.label);
+                $("#supp_id").val(ui.item.value);
+                return false;
+            }
+        });
+    });
+</script>
+
 
 <body class="bg-light">
     <div class="container py-5">
@@ -108,15 +126,10 @@ if (strtolower($role_name) === 'admin') {
             </div>
             <div class="col-md-3">
                 <label>Supplier</label>
-                <select name="supp_id" class="form-select">
-                    <option value="">-- All Suppliers --</option>
-                    <?php foreach ($suppliers as $supp): ?>
-                        <option value="<?= $supp['supp_id'] ?>" <?= $supp['supp_id'] === $supp_id ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($supp['supp_id'] . " - " . $supp['supp_name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <input type="text" id="supplier_search" class="form-control" placeholder="Search supplier...">
+                <input type="hidden" name="supp_id" id="supp_id" value="<?= htmlspecialchars($supp_id) ?>">
             </div>
+
             <div class="col-md-3 align-self-end">
                 <button type="submit" class="btn btn-primary">Search</button>
             </div>
@@ -159,7 +172,7 @@ if (strtolower($role_name) === 'admin') {
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
     <script>
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('#paymentTable').DataTable();
         });
     </script>
