@@ -43,7 +43,7 @@ if (strtolower($role_name) === 'admin') {
 
 <head>
     <meta charset="UTF-8">
-    <title>ShashiFashion</title>
+    <title>BABURAM</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -106,7 +106,7 @@ if (strtolower($role_name) === 'admin') {
 
     <!-- Sidebar -->
     <div class="sidebar">
-        <a class="navbar-brand text-white fw-bold mb-4 d-block" href="dashboard.php">Shashi Fashion</a>
+        <a class="navbar-brand text-white fw-bold mb-4 d-block" href="dashboard.php">BABURAM</a>
         <?php
         // 🔹 Fetch Menus
         $sql = "
