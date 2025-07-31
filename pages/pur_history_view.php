@@ -67,7 +67,7 @@ $stmt = $branch_db->prepare("
     B.net_rate,
     B.net_amt,
     B.mrp,
-    B.sales_price,
+    B.sales_price
 FROM t_receipt_hdr A
 JOIN t_receipt_det B ON A.receipt_id = B.receipt_id
 LEFT JOIN m_supplier C ON A.supp_id = C.supp_id
