@@ -11,8 +11,6 @@ $branch_id = $_GET['branch_id'] ?? '';
 $from = $_GET['from'] ?? date('Y-m-d');
 $to = $_GET['to'] ?? date('Y-m-d');
 
-$from = $branch_db->real_escape_string($from);
-$to   = $branch_db->real_escape_string($to);
 
 
 if (!$receipt_id) {
@@ -43,12 +41,15 @@ $branch_db = new mysqli(
     $config['db_password'],
     $config['db_name']
 );
+
 if ($branch_db->connect_error) {
     die("❌ Branch DB connection failed: " . $branch_db->connect_error);
 }
 $branch_db->set_charset('utf8mb4');
 $branch_db->query("SET time_zone = '+05:30'");
 
+$from = $branch_db->real_escape_string($from);
+$to   = $branch_db->real_escape_string($to);
 // Get GRN header
 $stmt = $branch_db->prepare("
     SELECT 
