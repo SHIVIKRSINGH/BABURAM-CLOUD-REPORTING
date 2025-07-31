@@ -99,6 +99,17 @@ if ($branch_db->multi_query($query)) {
         }
     } while ($branch_db->more_results() && $branch_db->next_result());
 }
+
+// 🏢 Branch list
+$branches = [];
+if (strtolower($role_name) === 'admin') {
+    $res = $con->query("SELECT branch_id FROM m_branch_sync_config");
+    while ($row = $res->fetch_assoc()) {
+        $branches[] = $row['branch_id'];
+    }
+} else {
+    $branches[] = $session_branch;
+}
 ?>
 
 <!DOCTYPE html>
@@ -115,6 +126,14 @@ if ($branch_db->multi_query($query)) {
         <h2 class="mb-4">ITEM-WISE PURCHASE REGISTER</h2>
 
         <form method="get" class="row g-3 mb-4">
+            <div class="col-sm-6 col-md-3">
+                <label>Branch</label>
+                <select name="branch" class="form-select" <?= strtolower($role_name) !== 'admin' ? 'disabled' : '' ?>>
+                    <?php foreach ($branches as $b): ?>
+                        <option value="<?= $b ?>" <?= $b === $selected_branch ? 'selected' : '' ?>><?= $b ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-md-3">
                 <label>From Date</label>
                 <input type="date" class="form-control" name="from" value="<?= htmlspecialchars($from) ?>">
