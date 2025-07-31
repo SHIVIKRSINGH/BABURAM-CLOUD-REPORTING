@@ -141,6 +141,7 @@ $stmt->close();
                 <table class="table table-bordered table-hover table-striped" id="grn-table">
                     <thead class="table-dark text-center">
                         <tr>
+                            <th>Sl No.</th>
                             <th>Invoice No.</th>
                             <th>Invoice Date</th>
                             <th>Cust Id</th>
