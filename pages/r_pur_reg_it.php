@@ -147,7 +147,7 @@ if (strtolower($role_name) === 'admin') {
             </div>
         </form>
 
-        <table class="table table-bordered table-striped">
+        <table id="puritemTable" class="table table-bordered table-striped">
             <thead>
                 <tr>
                     <th>Item ID</th>
@@ -192,6 +192,15 @@ if (strtolower($role_name) === 'admin') {
             Net Amt: ₹<?= number_format($totals['net_amt_final'], 2) ?>
         </div>
     </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#puritemTable').DataTable();
+        });
+    </script>
 </body>
 
 </html>
