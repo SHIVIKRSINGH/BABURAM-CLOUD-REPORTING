@@ -166,7 +166,7 @@ $stmt->close();
                         foreach ($items as $row): ?>
                             <tr class="text-center">
                                 <td><?= $i++ ?></td>
-                                <td class="text-start"><?= htmlspecialchars($row['receipt_no']) ?></td>
+                                <td class="text-start"><?= $row['receipt_no'] ?></td>
                                 <td><?= $row['receipt_dt'] ?></td>
                                 <td><?= $row['supp_id'] ?></td>
                                 <td><?= $row['supp_name'] ?></td>
@@ -180,7 +180,7 @@ $stmt->close();
                                 <td><?= number_format($row['net_rate'], 2) ?></td>
                                 <td><?= number_format($row['net_amt'], 2) ?></td>
                                 <td><?= number_format($row['mrp'], 2) ?></td>
-                                <td><?= number_format($row['sale_price'], 2) ?></td>
+                                <td><?= $row['sale_price'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
