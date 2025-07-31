@@ -180,7 +180,7 @@ $stmt->close();
                                 <td><?= number_format($row['net_rate'], 2) ?></td>
                                 <td><?= number_format($row['net_amt'], 2) ?></td>
                                 <td><?= number_format($row['mrp'], 2) ?></td>
-                                <td><?= $row['sale_price'] ?></td>
+                                <td><?= $row['sales_price'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
