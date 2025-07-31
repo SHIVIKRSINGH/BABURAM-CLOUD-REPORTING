@@ -45,7 +45,7 @@ $branch_db->query("SET time_zone = '+05:30'");
 $query = "
 CREATE TEMPORARY TABLE tmpPurRegIt AS
 SELECT 
-    B.item_id,
+    B.item_id,'' as item_name,
     SUM(IFNULL(B.qty, 0)) AS qty,
     SUM(IFNULL(B.net_amt, 0)) AS net_amt,
     0 AS ret_qty,
