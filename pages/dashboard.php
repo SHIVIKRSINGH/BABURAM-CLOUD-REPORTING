@@ -21,6 +21,8 @@ $summary_to   = $to ?: $today;
 $chart_from   = $from ?: $month_start;
 $chart_to     = $to ?: $today;
 
+$supp_id = $_GET['supp_id'] ?? '';
+
 // 🔌 Connect to branch DB dynamically
 $branch_db = null;
 $stmt = $con->prepare("SELECT * FROM m_branch_sync_config WHERE branch_id = ?");
@@ -100,7 +102,7 @@ $stmt = $branch_db->prepare("
 ");
 $stmt->bind_param("ssssss", $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to);
 $stmt->execute();
-$summary = $stmt->get_result()->fetch_assoc();  
+$summary = $stmt->get_result()->fetch_assoc();
 
 $total_sales = $summary['total_sales'];
 $total_returns = $summary['total_returns'];
@@ -173,6 +175,80 @@ $stmt->bind_param("ssssssss", $summary_from, $summary_to, $summary_from, $summar
 $stmt->execute();
 $result = $stmt->get_result();
 
+// Prepare and execute the updated USER payment mode-wise sale vs return query
+$stmt = $branch_db->prepare("
+    SELECT 
+    CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
+    SUM(x.total_sale) AS total_sale,
+    SUM(x.total_return) AS total_return,
+    SUM(x.total_sale) - SUM(x.total_return) AS net_total
+FROM (
+    -- Sales
+    SELECT 
+        a.pay_mode_id, 
+        SUM(a.pay_amt) AS total_sale, 
+        0 AS total_return
+    FROM t_invoice_pay_det a
+    JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+    JOIN m_user u ON b.cash_id = u.user_id
+    WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
+      AND u.user_id = ?
+    GROUP BY a.pay_mode_id
+
+    UNION ALL
+
+    -- Returns
+    SELECT 
+        a.pay_mode_id, 
+        0 AS total_sale, 
+        SUM(a.pay_amt) AS total_return
+    FROM t_sr_pay_det a
+    JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+    JOIN m_user u ON b.ent_by = u.user_id
+    WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+      AND u.user_id = ?
+    GROUP BY a.pay_mode_id
+) x
+GROUP BY x.pay_mode_id
+
+UNION ALL
+
+-- Totals across all users
+SELECT 
+    'TOTAL' AS pay_mode_id,
+    SUM(x.total_sale),
+    SUM(x.total_return),
+    SUM(x.total_sale) - SUM(x.total_return)
+FROM (
+    SELECT 
+        a.pay_mode_id, 
+        SUM(a.pay_amt) AS total_sale, 
+        0 AS total_return
+    FROM t_invoice_pay_det a
+    JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+    JOIN m_user u ON b.cash_id = u.user_id
+    WHERE DATE(b.invoice_dt) BETWEEN ? AND ? AND u.user_id=?
+    GROUP BY a.pay_mode_id
+
+    UNION ALL
+
+    SELECT 
+        a.pay_mode_id, 
+        0 AS total_sale, 
+        SUM(a.pay_amt) AS total_return
+    FROM t_sr_pay_det a
+    JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+    JOIN m_user u ON b.ent_by = u.user_id
+    WHERE DATE(b.sr_dt) BETWEEN ? AND ? and u.user_id=?
+    GROUP BY a.pay_mode_id
+) x;
+
+");
+
+$stmt->bind_param("ssssssssssss", $summary_from, $summary_to, $user_id, $summary_from, $summary_to, $user_id, $summary_from, $summary_to, $user_id, $summary_from, $summary_to, $user_id);
+$stmt->execute();
+$result_user = $stmt->get_result();
+
 // 🏢 Branch list
 $branches = [];
 if (strtolower($role_name) === 'admin') {
@@ -183,6 +259,14 @@ if (strtolower($role_name) === 'admin') {
 } else {
     $branches[] = $session_branch;
 }
+
+// Load supplier list (optional)
+$suppliers = [];
+$supp_stmt = $branch_db->query("SELECT user_id, user_name FROM m_user ORDER BY user_name");
+while ($row = $supp_stmt->fetch_assoc()) {
+    $user[] = $row;
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -193,6 +277,21 @@ if (strtolower($role_name) === 'admin') {
     <title>Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Autocomplete Script -->
+    <script>
+        $(function() {
+            $("#user_search").autocomplete({
+                source: "user_search.php",
+                minLength: 2,
+                select: function(event, ui) {
+                    $("#user_search").val(ui.item.label);
+                    $("#user_id").val(ui.item.value);
+                    return false;
+                }
+            });
+        });
+    </script>
 </head>
 
 <body class="bg-light">
@@ -295,6 +394,56 @@ if (strtolower($role_name) === 'admin') {
                 </div>
             </div>
         </div>
+        <!-- USER WIISE PAYMODE SALE SUMMARY -->
+        <!-- <div class="row g-3 mb-4"> -->
+        <div class="card shadow-sm mt-4">
+            <div class="p-3 bg-white shadow-sm rounded text-center">
+                <div class="row g-3 mb-4 justify-content-center">
+                    <div class="col-auto text-center">
+                        <h5 class="m-0">USER WIISE PAYMODE SALE SUMMARY</h5>
+                    </div>
+                </div>
+                <form method="get" class="row g-3 mb-3 justify-content-center">
+                    <div class="col-md-3">
+                        <label>User/Cashier</label>
+                        <input type="text" id="user_search" class="form-control" placeholder="Search User...">
+                        <input type="hidden" name="user_id" id="user_id" value="<?= htmlspecialchars($user_id) ?>">
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button type="submit" class="btn btn-primary w-100">Search</button>
+                    </div>
+                </form>
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Payment Mode</th>
+                            <th>Total Sale</th>
+                            <th>Total Sale Return</th>
+                            <th>Net Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while ($row = $result_user->fetch_assoc()) {
+                            $isTotalRow = $row['pay_mode_id'] === 'TOTAL';
+                        ?>
+                            <tr>
+                                <td><strong><?php echo htmlspecialchars($row['pay_mode_id']); ?></strong></td>
+                                <td style="<?php echo $isTotalRow ? 'background-color: #d4edda; color: #155724; font-weight: bold;' : ''; ?>">
+                                    <?php echo number_format($row['total_sale'], 2); ?>
+                                </td>
+                                <td style="<?php echo $isTotalRow ? 'background-color: #f8d7da; color: #721c24; font-weight: bold;' : ''; ?>">
+                                    <?php echo number_format($row['total_return'], 2); ?>
+                                </td>
+                                <td style="<?php echo $isTotalRow ? 'background-color: #e6f4ea; color: #1e4620; font-weight: bold;' : ''; ?>">
+                                    <?php echo number_format($row['net_total'], 2); ?>
+                                </td>
+                            </tr>
+                        <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     </div>
 
     <script>
