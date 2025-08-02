@@ -26,7 +26,7 @@ if ($branch_db->connect_error) die("❌ DB Error: " . $branch_db->connect_error)
 $branch_db->set_charset('utf8mb4');
 $branch_db->query("SET time_zone = '+05:30'");
 
-// Load supplier list
+// Load supplier list (optional)
 $suppliers = [];
 $supp_stmt = $branch_db->query("SELECT supp_id, supp_name FROM m_supplier ORDER BY supp_name");
 while ($row = $supp_stmt->fetch_assoc()) {
@@ -81,27 +81,35 @@ if (strtolower($role_name) === 'admin') {
 <head>
     <meta charset="UTF-8">
     <title>Payment Report</title>
+
+    <!-- Bootstrap and DataTables CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+
+    <!-- jQuery UI CSS -->
     <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
 
-</head>
+    <!-- jQuery first -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
-<script>
-    $(function() {
-        $("#supplier_search").autocomplete({
-            source: "supplier_search.php",
-            minLength: 2,
-            select: function(event, ui) {
-                $("#supplier_search").val(ui.item.label);
-                $("#supp_id").val(ui.item.value);
-                return false;
-            }
+    <!-- jQuery UI after jQuery -->
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+
+    <!-- Autocomplete Script -->
+    <script>
+        $(function() {
+            $("#supplier_search").autocomplete({
+                source: "supplier_search.php",
+                minLength: 2,
+                select: function(event, ui) {
+                    $("#supplier_search").val(ui.item.label);
+                    $("#supp_id").val(ui.item.value);
+                    return false;
+                }
+            });
         });
-    });
-</script>
-
+    </script>
+</head>
 
 <body class="bg-light">
     <div class="container py-5">
@@ -167,8 +175,7 @@ if (strtolower($role_name) === 'admin') {
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- DataTables JS -->
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
     <script>
