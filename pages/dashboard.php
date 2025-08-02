@@ -396,7 +396,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
         </div>
         <!-- USER WIISE PAYMODE SALE SUMMARY -->
         <!-- <div class="row g-3 mb-4"> -->
-        <div class="card shadow-sm mt-4">
+        <!-- <div class="card shadow-sm mt-4">
             <div class="p-3 bg-white shadow-sm rounded text-center">
                 <div class="row g-3 mb-4 justify-content-center">
                     <div class="col-auto text-center">
@@ -442,9 +442,9 @@ while ($row = $supp_stmt->fetch_assoc()) {
                     </tbody>
                 </table>
             </div>
-        </div>
+        </div> -->
     </div>
-    </div>
+    <!-- </div> -->
 
     <script>
         const ctx = document.getElementById('chart').getContext('2d');
