@@ -264,7 +264,7 @@ if (strtolower($role_name) === 'admin') {
 $suppliers = [];
 $supp_stmt = $branch_db->query("SELECT user_id, user_name FROM m_user ORDER BY user_name");
 while ($row = $supp_stmt->fetch_assoc()) {
-    $user[] = $row;
+    $suppliers[] = $row;
 }
 
 ?>
