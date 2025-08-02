@@ -178,10 +178,10 @@ $result = $stmt->get_result();
 // Prepare and execute the updated USER payment mode-wise sale vs return query
 $stmt = $branch_db->prepare("
     SELECT 
-    CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
-    SUM(x.total_sale) AS total_sale,
-    SUM(x.total_return) AS total_return,
-    SUM(x.total_sale) - SUM(x.total_return) AS net_total
+     CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
+    COALESCE(SUM(x.total_sale), 0) AS total_sale,
+    COALESCE(SUM(x.total_return), 0) AS total_return,
+    COALESCE(SUM(x.total_sale) - SUM(x.total_return), 0) AS net_total
 FROM (
     -- Sales
     SELECT 
