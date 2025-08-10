@@ -57,56 +57,64 @@ $from = $branch_db->real_escape_string($from);
 $to   = $branch_db->real_escape_string($to);
 
 $query = "
-    CREATE TEMPORARY TABLE tmpSaleIt AS
-    SELECT 
-        A.item_id,
-        SUM(IFNULL(A.qty,0)) AS item_qty,
-        SUM(IFNULL(A.net_amt,0) - ((IFNULL(A.net_amt,0) * IFNULL(B.disc_per,0)) / 100)) AS item_amt,
-        SUM(IFNULL(A.qty,0) * IFNULL(A.pur_rate,0)) AS pur_amt
-    FROM t_invoice_det A
-    JOIN t_invoice_hdr B ON A.invoice_no = B.invoice_no
-    WHERE B.invoice_dt BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') AND STR_TO_DATE('$to', '%Y-%m-%d')
-    GROUP BY A.item_id;
+   CREATE TEMPORARY TABLE tmpSaleIt AS
+SELECT 
+    A.item_id,
+    SUM(IFNULL(A.qty,0)) AS item_qty,
+    SUM(
+        (IFNULL(A.net_amt,0) - ((IFNULL(A.net_amt,0) * IFNULL(B.disc_per,0)) / 100))
+    ) AS item_amt,
+    SUM(IFNULL(A.qty,0) * IFNULL(A.pur_rate,0)) AS pur_amt
+FROM t_invoice_det A
+JOIN t_invoice_hdr B ON A.invoice_no = B.invoice_no
+WHERE B.invoice_dt BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') AND STR_TO_DATE('$to', '%Y-%m-%d')
+GROUP BY A.item_id;
 
-    CREATE TEMPORARY TABLE tmpSaleRetIt AS
-    SELECT 
-        A.item_id,
-        SUM(IFNULL(A.qty,0)) AS item_ret_qty,
-        SUM(IFNULL(A.net_amt,0)) AS item_ret_amt,
-        SUM(IFNULL(A.qty,0) * IFNULL(A.pur_rate,0)) AS pur_ret_amt
-    FROM t_sr_det A
-    JOIN t_sr_hdr B ON A.sr_no = B.sr_no
-    WHERE B.sr_dt BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') AND STR_TO_DATE('$to', '%Y-%m-%d')
-    GROUP BY A.item_id;
+CREATE TEMPORARY TABLE tmpSaleRetIt AS
+SELECT 
+    A.item_id,
+    SUM(IFNULL(A.qty,0)) AS item_ret_qty,
+    SUM(
+        (IFNULL(A.net_amt,0) - ((IFNULL(A.net_amt,0) * IFNULL(B.disc_per,0)) / 100))
+    ) AS item_ret_amt,
+    SUM(IFNULL(A.qty,0) * IFNULL(A.pur_rate,0)) AS pur_ret_amt
+FROM t_sr_det A
+JOIN t_sr_hdr B ON A.sr_no = B.sr_no
+WHERE B.sr_dt BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') AND STR_TO_DATE('$to', '%Y-%m-%d')
+GROUP BY A.item_id;
 
-    SELECT 
-        I.item_id,
-        M.item_desc AS item_name,
-        IFNULL(S.item_qty, 0) AS item_qty,
-        IFNULL(S.item_amt, 0) AS item_amt,
-        IFNULL(R.item_ret_qty, 0) AS item_ret_qty,
-        IFNULL(R.item_ret_amt, 0) AS item_ret_amt,
-        (IFNULL(S.item_qty, 0) - IFNULL(R.item_ret_qty, 0)) AS net_qty,
-        (IFNULL(S.item_amt, 0) - IFNULL(R.item_ret_amt, 0)) AS net_amt,
-        IFNULL(M.sale_tax_paid, '') AS sale_tax_paid,
-        IFNULL(T.tax_per, 0) AS vat_per,
-        IFNULL(M.cost_price, 0) AS cost_price,
-        (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)) AS pur_amt,
-        CASE
-            WHEN (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)) > 0 THEN
-                ROUND(((IFNULL(S.item_amt, 0) - IFNULL(R.item_ret_amt, 0) - (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0))) * 100) / (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)), 2)
-            ELSE NULL
-        END AS margin_percent
-    FROM m_item_hdr I
-    LEFT JOIN m_item_hdr M ON I.item_id = M.item_id
-    LEFT JOIN tmpSaleIt S ON I.item_id = S.item_id
-    LEFT JOIN tmpSaleRetIt R ON I.item_id = R.item_id
-    LEFT JOIN m_tax_type T ON M.sale_tax_paid = T.tax_type_id
-    WHERE IFNULL(S.item_qty, 0) > 0 OR IFNULL(R.item_ret_qty, 0) > 0
-    ORDER BY I.item_id;
+SELECT 
+    I.item_id,
+    M.item_desc AS item_name,
+    IFNULL(S.item_qty, 0) AS item_qty,
+    IFNULL(S.item_amt, 0) AS item_amt,
+    IFNULL(R.item_ret_qty, 0) AS item_ret_qty,
+    IFNULL(R.item_ret_amt, 0) AS item_ret_amt,
+    (IFNULL(S.item_qty, 0) - IFNULL(R.item_ret_qty, 0)) AS net_qty,
+    (IFNULL(S.item_amt, 0) - IFNULL(R.item_ret_amt, 0)) AS net_amt,
+    IFNULL(M.sale_tax_paid, '') AS sale_tax_paid,
+    IFNULL(T.tax_per, 0) AS vat_per,
+    IFNULL(M.cost_price, 0) AS cost_price,
+    (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)) AS pur_amt,
+    CASE
+        WHEN (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)) > 0 THEN
+            ROUND(
+                ((IFNULL(S.item_amt, 0) - IFNULL(R.item_ret_amt, 0) - (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0))) * 100) 
+                / (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)), 
+            2)
+        ELSE NULL
+    END AS margin_percent
+FROM m_item_hdr I
+LEFT JOIN m_item_hdr M ON I.item_id = M.item_id
+LEFT JOIN tmpSaleIt S ON I.item_id = S.item_id
+LEFT JOIN tmpSaleRetIt R ON I.item_id = R.item_id
+LEFT JOIN m_tax_type T ON M.sale_tax_paid = T.tax_type_id
+WHERE IFNULL(S.item_qty, 0) > 0 OR IFNULL(R.item_ret_qty, 0) > 0
+ORDER BY I.item_id;
 
-    DROP TEMPORARY TABLE IF EXISTS tmpSaleIt;
-    DROP TEMPORARY TABLE IF EXISTS tmpSaleRetIt;
+DROP TEMPORARY TABLE IF EXISTS tmpSaleIt;
+DROP TEMPORARY TABLE IF EXISTS tmpSaleRetIt;
+
 ";
 
 if ($branch_db->multi_query($query)) {
