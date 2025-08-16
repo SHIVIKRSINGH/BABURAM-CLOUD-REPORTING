@@ -40,6 +40,15 @@ if ($branch_db->connect_error) {
 $branch_db->set_charset('utf8mb4');
 $branch_db->query("SET time_zone = '+05:30'");
 
+// ==================== Fetch Invoice Header (for total) ====================
+$invoice_hdr = [];
+$stmt = $branch_db->prepare("SELECT invoice_no, bill_amt FROM t_invoice_hdr WHERE invoice_no = ?");
+$stmt->bind_param("s", $invoice_no);
+$stmt->execute();
+$result = $stmt->get_result();
+$invoice_hdr = $result->fetch_assoc();
+$stmt->close();
+
 // ==================== Fetch Invoice Item Details ====================
 $invoice_det = [];
 $stmt = $branch_db->prepare("
@@ -68,6 +77,33 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
+// Group items by item_id
+$grouped_items = [];
+foreach ($invoice_det as $row) {
+    $item_id = $row['item_id'];
+    if (!isset($grouped_items[$item_id])) {
+        $grouped_items[$item_id] = [
+            'item_id'    => $row['item_id'],
+            'item_name'  => $row['item_name'],
+            'qty'        => (float)$row['qty'],
+            'mrp'        => (float)$row['mrp'],
+            'sale_price' => (float)$row['sale_price'],
+            'disc_per'   => (float)$row['disc_per'],
+            'disc_amt'   => (float)$row['disc_amt'],
+            'sale_tax_per' => (float)$row['sale_tax_per'],
+            'sale_tax_amt' => (float)$row['sale_tax_amt'],
+            'net_amt_total' => (float)$row['net_amt'],
+            'pur_rate'   => (float)$row['pur_rate'],
+        ];
+    } else {
+        $grouped_items[$item_id]['qty'] += (float)$row['qty'];
+        $grouped_items[$item_id]['disc_amt'] += (float)$row['disc_amt'];
+        $grouped_items[$item_id]['sale_tax_amt'] += (float)$row['sale_tax_amt'];
+        // keep net_amt_total as-is (do not sum)
+    }
+}
+$invoice_det_grouped = array_values($grouped_items);
+
 // ==================== Fetch Invoice Payment Details ====================
 $invoice_pay = [];
 $stmt = $branch_db->prepare("
@@ -88,7 +124,6 @@ while ($row = $result->fetch_assoc()) {
     $invoice_pay[] = $row;
 }
 $stmt->close();
-
 ?>
 
 <!DOCTYPE html>
@@ -97,50 +132,20 @@ $stmt->close();
 <head>
     <title>Invoice #<?= htmlspecialchars($invoice_no) ?> - Details</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .action-buttons {
-            position: sticky;
-            top: 0;
-            background-color: #f8f9fa;
-            z-index: 10;
-            padding: 10px 0;
-        }
-
-        .table-responsive {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        @media print {
-            .no-print {
-                display: none;
-            }
-
-            .table-responsive {
-                max-height: none !important;
-                overflow: visible !important;
-            }
-        }
-    </style>
 </head>
 
 <body class="bg-light">
     <div class="container my-5">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3 class="mb-0">🧾 Invoice #<?= htmlspecialchars($invoice_no) ?></h3>
-            <div class="action-buttons no-print">
-                <button class="btn btn-primary btn-sm" onclick="printFull()">🖨️ Print</button>
-                <button class="btn btn-danger btn-sm" onclick="downloadPDF()">📄 PDF</button>
-                <button class="btn btn-success btn-sm" onclick="exportToExcel()">📊 Excel</button>
-            </div>
         </div>
 
         <!-- ==================== Invoice Items Table ==================== -->
         <div class="card shadow-sm mb-4">
             <div class="card-body">
                 <h5 class="card-title">📦 Invoice Item Details</h5>
-                <div class="table-responsive" id="items-wrapper">
-                    <table class="table table-bordered table-striped table-hover" id="items-table">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
                         <thead class="table-dark text-center">
                             <tr>
                                 <th>Sl No.</th>
@@ -158,17 +163,20 @@ $stmt->close();
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (count($invoice_det) === 0): ?>
+                            <?php if (count($invoice_det_grouped) === 0): ?>
                                 <tr>
-                                    <td colspan="11" class="text-center text-muted">No Items Found</td>
+                                    <td colspan="12" class="text-center text-muted">No Items Found</td>
                                 </tr>
                             <?php else: ?>
                                 <?php $i = 1;
-                                foreach ($invoice_det as $row): ?>
+                                foreach ($invoice_det_grouped as $row): ?>
                                     <tr class="text-center">
                                         <td><?= $i++ ?></td>
                                         <td><?= htmlspecialchars($row['item_id']) ?></td>
-                                        <td class="text-start"><?= htmlspecialchars($row['item_name']) ?></td>
+                                        <td class="text-start">
+                                            <?= htmlspecialchars($row['item_name']) ?><br>
+                                            <small class="text-muted">(per unit: <?= number_format($row['net_amt_total'] / max(1, $row['qty']), 2) ?>)</small>
+                                        </td>
                                         <td><?= $row['qty'] ?></td>
                                         <td><?= number_format($row['mrp'], 2) ?></td>
                                         <td><?= number_format($row['sale_price'], 2) ?></td>
@@ -176,10 +184,15 @@ $stmt->close();
                                         <td><?= number_format($row['disc_amt'], 2) ?></td>
                                         <td><?= number_format($row['sale_tax_per'], 2) ?></td>
                                         <td><?= number_format($row['sale_tax_amt'], 2) ?></td>
-                                        <td><?= number_format($row['net_amt'], 2) ?></td>
+                                        <td><?= number_format($row['net_amt_total'], 2) ?></td>
                                         <td><?= number_format($row['pur_rate'], 2) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
+                                <tr class="fw-bold text-end">
+                                    <td colspan="10">Grand Total</td>
+                                    <td><?= number_format($invoice_hdr['bill_amt'] ?? 0, 2) ?></td>
+                                    <td></td>
+                                </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -191,8 +204,8 @@ $stmt->close();
         <div class="card shadow-sm">
             <div class="card-body">
                 <h5 class="card-title">💳 Payment Details</h5>
-                <div class="table-responsive" id="pay-wrapper">
-                    <table class="table table-bordered table-striped table-hover" id="pay-table">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
                         <thead class="table-dark text-center">
                             <tr>
                                 <th>Sl No.</th>
@@ -215,9 +228,9 @@ $stmt->close();
                                         <td><?= $j++ ?></td>
                                         <td><?= htmlspecialchars($row['pay_mode_id'] ?? '-') ?></td>
                                         <td><?= number_format((float)($row['pay_amt'] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($row['ref_no'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($row['ref_amt'] ?? '-') ?></td>
                                         <td><?= htmlspecialchars($row['bank_name'] ?? '-') ?></td>
-                                        <td><?= htmlspecialchars($row['card_no'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($row['cc_no'] ?? '-') ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -226,76 +239,7 @@ $stmt->close();
                 </div>
             </div>
         </div>
-
     </div>
-
-    <!-- JS Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-    <script>
-        function disableScrollWrapper(wrapperId) {
-            const wrapper = document.getElementById(wrapperId);
-            wrapper.style.maxHeight = 'none';
-            wrapper.style.overflow = 'visible';
-        }
-
-        function enableScrollWrapper(wrapperId) {
-            const wrapper = document.getElementById(wrapperId);
-            wrapper.style.maxHeight = '500px';
-            wrapper.style.overflow = 'auto';
-        }
-
-        function downloadPDF() {
-            disableScrollWrapper('items-wrapper');
-            disableScrollWrapper('pay-wrapper');
-            const element = document.body;
-            html2pdf().set({
-                margin: 0.5,
-                filename: 'Invoice_<?= $invoice_no ?>.pdf',
-                image: {
-                    type: 'jpeg',
-                    quality: 0.98
-                },
-                html2canvas: {
-                    scale: 2
-                },
-                jsPDF: {
-                    unit: 'in',
-                    format: 'a4',
-                    orientation: 'portrait'
-                }
-            }).from(element).save().then(() => {
-                enableScrollWrapper('items-wrapper');
-                enableScrollWrapper('pay-wrapper');
-            });
-        }
-
-        function exportToExcel() {
-            disableScrollWrapper('items-wrapper');
-            disableScrollWrapper('pay-wrapper');
-            setTimeout(() => {
-                const wb = XLSX.utils.book_new();
-                const itemsTable = document.getElementById("items-table");
-                const payTable = document.getElementById("pay-table");
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(itemsTable), "Invoice Items");
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(payTable), "Payments");
-                XLSX.writeFile(wb, 'Invoice_<?= $invoice_no ?>.xlsx');
-                enableScrollWrapper('items-wrapper');
-                enableScrollWrapper('pay-wrapper');
-            }, 100);
-        }
-
-        function printFull() {
-            disableScrollWrapper('items-wrapper');
-            disableScrollWrapper('pay-wrapper');
-            setTimeout(() => {
-                window.print();
-                enableScrollWrapper('items-wrapper');
-                enableScrollWrapper('pay-wrapper');
-            }, 200);
-        }
-    </script>
 </body>
 
 </html>
