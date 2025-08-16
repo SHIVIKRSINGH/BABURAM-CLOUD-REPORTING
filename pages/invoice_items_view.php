@@ -77,7 +77,7 @@ $stmt = $branch_db->prepare("
         p.pay_amt,
         p.ref_amt,
         p.bank_name,
-        p.card_no
+        p.cc_no
     FROM t_invoice_pay_det p
     WHERE p.invoice_no = ?
 ");
@@ -217,7 +217,7 @@ $stmt->close();
                                         <td><?= number_format($row['pay_amt'], 2) ?></td>
                                         <td><?= htmlspecialchars($row['ref_amt'] ?? '-') ?></td>
                                         <td><?= htmlspecialchars($row['bank_name'] ?? '-') ?></td>
-                                        <td><?= htmlspecialchars($row['card_no'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($row['cc_no'] ?? '-') ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
