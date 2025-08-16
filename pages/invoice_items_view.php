@@ -68,35 +68,6 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// ==================== Group Invoice Items ====================
-$grouped_items = [];
-foreach ($invoice_det as $row) {
-    $item_id = $row['item_id'];
-
-    if (!isset($grouped_items[$item_id])) {
-        $grouped_items[$item_id] = [
-            'item_id'    => $row['item_id'],
-            'item_name'  => $row['item_name'],
-            'qty'        => (float)$row['qty'],
-            'mrp'        => (float)$row['mrp'],
-            'sale_price' => (float)$row['sale_price'],
-            'disc_per'   => (float)$row['disc_per'],
-            'disc_amt'   => (float)$row['disc_amt'],
-            'sale_tax_per' => (float)$row['sale_tax_per'],
-            'sale_tax_amt' => (float)$row['sale_tax_amt'],
-            'net_amt_total' => (float)$row['net_amt'],  // sum
-            'net_amt_single' => (float)$row['net_amt'] / max((float)$row['qty'], 1), // per unit
-            'pur_rate' => (float)$row['pur_rate'], // single
-        ];
-    } else {
-        $grouped_items[$item_id]['qty'] += (float)$row['qty'];
-        $grouped_items[$item_id]['disc_amt'] += (float)$row['disc_amt'];
-        $grouped_items[$item_id]['sale_tax_amt'] += (float)$row['sale_tax_amt'];
-        $grouped_items[$item_id]['net_amt_total'] += (float)$row['net_amt'];
-    }
-}
-$invoice_det_grouped = array_values($grouped_items);
-
 // ==================== Fetch Invoice Payment Details ====================
 $invoice_pay = [];
 $stmt = $branch_db->prepare("
@@ -187,17 +158,13 @@ $stmt->close();
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (count($invoice_det_grouped) === 0): ?>
+                            <?php if (count($invoice_det) === 0): ?>
                                 <tr>
-                                    <td colspan="12" class="text-center text-muted">No Items Found</td>
+                                    <td colspan="11" class="text-center text-muted">No Items Found</td>
                                 </tr>
                             <?php else: ?>
-                                <?php 
-                                $i = 1; 
-                                $grand_total = 0;
-                                foreach ($invoice_det_grouped as $row): 
-                                    $grand_total += $row['net_amt_total'];
-                                ?>
+                                <?php $i = 1;
+                                foreach ($invoice_det as $row): ?>
                                     <tr class="text-center">
                                         <td><?= $i++ ?></td>
                                         <td><?= htmlspecialchars($row['item_id']) ?></td>
@@ -209,18 +176,10 @@ $stmt->close();
                                         <td><?= number_format($row['disc_amt'], 2) ?></td>
                                         <td><?= number_format($row['sale_tax_per'], 2) ?></td>
                                         <td><?= number_format($row['sale_tax_amt'], 2) ?></td>
-                                        <td>
-                                            <?= number_format($row['net_amt_total'], 2) ?>
-                                            <br><small class="text-muted">(per unit: <?= number_format($row['net_amt_single'], 2) ?>)</small>
-                                        </td>
+                                        <td><?= number_format($row['net_amt'], 2) ?></td>
                                         <td><?= number_format($row['pur_rate'], 2) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
-                                <tr class="fw-bold text-center table-secondary">
-                                    <td colspan="10" class="text-end">Grand Total</td>
-                                    <td><?= number_format($grand_total, 2) ?></td>
-                                    <td>-</td>
-                                </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -256,9 +215,9 @@ $stmt->close();
                                         <td><?= $j++ ?></td>
                                         <td><?= htmlspecialchars($row['pay_mode_id'] ?? '-') ?></td>
                                         <td><?= number_format((float)($row['pay_amt'] ?? 0), 2) ?></td>
-                                        <td><?= number_format((float)($row['ref_amt'] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($row['ref_no'] ?? '-') ?></td>
                                         <td><?= htmlspecialchars($row['bank_name'] ?? '-') ?></td>
-                                        <td><?= htmlspecialchars($row['cc_no'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($row['card_no'] ?? '-') ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -294,9 +253,18 @@ $stmt->close();
             html2pdf().set({
                 margin: 0.5,
                 filename: 'Invoice_<?= $invoice_no ?>.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2 },
-                jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                image: {
+                    type: 'jpeg',
+                    quality: 0.98
+                },
+                html2canvas: {
+                    scale: 2
+                },
+                jsPDF: {
+                    unit: 'in',
+                    format: 'a4',
+                    orientation: 'portrait'
+                }
             }).from(element).save().then(() => {
                 enableScrollWrapper('items-wrapper');
                 enableScrollWrapper('pay-wrapper');
