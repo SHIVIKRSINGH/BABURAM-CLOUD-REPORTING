@@ -192,10 +192,10 @@ $stmt->close();
                                     <td colspan="12" class="text-center text-muted">No Items Found</td>
                                 </tr>
                             <?php else: ?>
-                                <?php
-                                $i = 1;
+                                <?php 
+                                $i = 1; 
                                 $grand_total = 0;
-                                foreach ($invoice_det_grouped as $row):
+                                foreach ($invoice_det_grouped as $row): 
                                     $grand_total += $row['net_amt_total'];
                                 ?>
                                     <tr class="text-center">
@@ -294,18 +294,9 @@ $stmt->close();
             html2pdf().set({
                 margin: 0.5,
                 filename: 'Invoice_<?= $invoice_no ?>.pdf',
-                image: {
-                    type: 'jpeg',
-                    quality: 0.98
-                },
-                html2canvas: {
-                    scale: 2
-                },
-                jsPDF: {
-                    unit: 'in',
-                    format: 'a4',
-                    orientation: 'portrait'
-                }
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
             }).from(element).save().then(() => {
                 enableScrollWrapper('items-wrapper');
                 enableScrollWrapper('pay-wrapper');
