@@ -213,11 +213,11 @@ $stmt->close();
                                 foreach ($invoice_pay as $row): ?>
                                     <tr class="text-center">
                                         <td><?= $j++ ?></td>
-                                        <td><?= htmlspecialchars($row['pay_mode']) ?></td>
-                                        <td><?= number_format($row['pay_amt'], 2) ?></td>
-                                        <td><?= htmlspecialchars($row['ref_amt'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($row['pay_mode'] ?? '-') ?></td>
+                                        <td><?= number_format((float)($row['pay_amt'] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($row['ref_no'] ?? '-') ?></td>
                                         <td><?= htmlspecialchars($row['bank_name'] ?? '-') ?></td>
-                                        <td><?= htmlspecialchars($row['cc_no'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($row['card_no'] ?? '-') ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
