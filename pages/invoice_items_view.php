@@ -213,7 +213,7 @@ $stmt->close();
                                 foreach ($invoice_pay as $row): ?>
                                     <tr class="text-center">
                                         <td><?= $j++ ?></td>
-                                        <td><?= htmlspecialchars($row['pay_mode'] ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($row['pay_mode_id'] ?? '-') ?></td>
                                         <td><?= number_format((float)($row['pay_amt'] ?? 0), 2) ?></td>
                                         <td><?= htmlspecialchars($row['ref_no'] ?? '-') ?></td>
                                         <td><?= htmlspecialchars($row['bank_name'] ?? '-') ?></td>
