@@ -42,7 +42,7 @@ $branch_db->query("SET time_zone = '+05:30'");
 
 // ==================== Fetch Invoice Header (for total) ====================
 $invoice_hdr = [];
-$stmt = $branch_db->prepare("SELECT invoice_no, bill_amt FROM t_invoice_hdr WHERE invoice_no = ?");
+$stmt = $branch_db->prepare("SELECT invoice_no, net_amt_after_disc FROM t_invoice_hdr WHERE invoice_no = ?");
 $stmt->bind_param("s", $invoice_no);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -190,7 +190,7 @@ $stmt->close();
                                 <?php endforeach; ?>
                                 <tr class="fw-bold text-end">
                                     <td colspan="10">Grand Total</td>
-                                    <td><?= number_format($invoice_hdr['bill_amt'] ?? 0, 2) ?></td>
+                                    <td><?= number_format($invoice_hdr['net_amt_after_disc'] ?? 0, 2) ?></td>
                                     <td></td>
                                 </tr>
                             <?php endif; ?>
