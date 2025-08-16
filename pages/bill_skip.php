@@ -68,7 +68,9 @@ $branch_db->set_charset('utf8mb4');
 $branch_db->query("SET time_zone = '+05:30'");
 
 
-if ($stmt = $branch_db->prepare("SELECT ent_by,date(invoice_dt) as invoice_dt, bill_time,item_id, bar_code, qty, mrp,sale_price,disc_per FROM t_invoice_temp_det WHERE invoice_dt BETWEEN ? AND ? ORDER BY invoice_no desc")) {
+if ($stmt = $branch_db->prepare("SELECT t.ent_by,date(t.invoice_dt) as invoice_dt, t.bill_time,t.item_id, t.bar_code,h.item_desc,
+ t.qty, t.mrp,t.sale_price,t.disc_per FROM t_invoice_temp_det t left join m_item_hdr h on t.item_id=h.item_id
+  WHERE h.invoice_dt BETWEEN ? AND ? ORDER BY h.invoice_no desc")) {
     $stmt->bind_param("ss", $from, $to);
     $stmt->execute();
     $result = $stmt->get_result();
