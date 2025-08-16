@@ -146,6 +146,7 @@ if (strtolower($role_name) === 'admin') {
                     <th>Invoice Time</th>
                     <th>Item Id</th>
                     <th>Barcode</th>
+                    <th>Item Name</th>
                     <th>Qty</th>
                     <th>MRP</th>
                     <th>Sale Price</th>
@@ -161,6 +162,7 @@ if (strtolower($role_name) === 'admin') {
                         <td><?= htmlspecialchars($row['bill_time']) ?></td>
                         <td><?= htmlspecialchars($row['item_id']) ?></td>
                         <td><?= htmlspecialchars($row['bar_code']) ?></td>
+                        <td><?= htmlspecialchars($row['item_desc']) ?></td>
                         <td><?= number_format($row['qty'], 2) ?></td>
                         <td><?= number_format($row['mrp'], 2) ?></td>
                         <td><?= number_format($row['sale_price'], 2) ?></td>
