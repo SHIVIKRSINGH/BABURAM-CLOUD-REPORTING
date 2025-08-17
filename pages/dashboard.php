@@ -49,7 +49,7 @@ $branch_db->query("SET time_zone = '+05:30'");
 
 // 🔸 Sales
 $stmt = $branch_db->prepare("
-    SELECT DATE(invoice_dt) AS date, SUM(net_amt_after_disc) AS total_sale
+    SELECT DATE(invoice_dt) AS date, coalesce(SUM(net_amt_after_disc),0) AS total_sale
     FROM t_invoice_hdr
     WHERE DATE(invoice_dt) BETWEEN ? AND ?
     GROUP BY DATE(invoice_dt)
@@ -60,7 +60,7 @@ $res_sales = $stmt->get_result();
 
 // 🔸 Returns
 $stmt = $branch_db->prepare("
-    SELECT DATE(sr_dt) AS date, SUM(net_amt) AS total_return
+    SELECT DATE(sr_dt) AS date, coalesce(SUM(net_amt),0) AS total_return
     FROM t_sr_hdr
     WHERE DATE(sr_dt) BETWEEN ? AND ?
     GROUP BY DATE(sr_dt)
