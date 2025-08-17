@@ -111,65 +111,135 @@ $net_total = $total_sales - $total_returns;
 
 // PAYMENT MODE DATA
 
-// Prepare and execute the updated payment mode-wise sale vs return query
-$stmt = $branch_db->prepare("
-    SELECT 
-        CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
-        SUM(x.total_sale) AS total_sale,
-        SUM(x.total_return) AS total_return,
-        SUM(x.total_sale) - SUM(x.total_return) AS net_total
-    FROM (
-        SELECT 
-            a.pay_mode_id, 
-            SUM(a.pay_amt) AS total_sale, 
-            0 AS total_return
-        FROM t_invoice_pay_det a
-        JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
-        WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
+// ===================================================================
+// PAYMENT MODE DATA (user/date filters supported)
+// ===================================================================
+$user_id_filter = $_GET['user_id'] ?? '';
+$from_user = $_GET['from_user'] ?? $summary_from;
+$to_user   = $_GET['to_user'] ?? $summary_to;
+
+if ($user_id_filter) {
+    // 👉 USER-WISE QUERY
+    $stmt = $branch_db->prepare("
+        SELECT CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
+               COALESCE(SUM(x.total_sale), 0) AS total_sale,
+               COALESCE(SUM(x.total_return), 0) AS total_return,
+               COALESCE(SUM(x.total_sale) - SUM(x.total_return), 0) AS net_total
+        FROM (
+            -- Sales
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            JOIN m_user u ON b.cash_id = u.user_id
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ? 
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
+
+            UNION ALL
+
+            -- Returns
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            JOIN m_user u ON b.ent_by = u.user_id
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
+        ) x
+        GROUP BY x.pay_mode_id
 
         UNION ALL
+        -- Totals row
+        SELECT 'TOTAL' AS pay_mode_id,
+               SUM(x.total_sale), SUM(x.total_return),
+               SUM(x.total_sale) - SUM(x.total_return)
+        FROM (
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            JOIN m_user u ON b.cash_id = u.user_id
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ? 
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
 
-        SELECT 
-            a.pay_mode_id, 
-            0 AS total_sale, 
-            SUM(a.pay_amt) AS total_return
-        FROM t_sr_pay_det a
-        JOIN t_sr_hdr b ON a.sr_no = b.sr_no
-        WHERE DATE(b.sr_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
-    ) x
-    GROUP BY x.pay_mode_id
+            UNION ALL
 
-    UNION ALL
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            JOIN m_user u ON b.ent_by = u.user_id
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
+        ) x
+    ");
 
-    SELECT 
-        'TOTAL' AS pay_mode_id,
-        SUM(x.total_sale),
-        SUM(x.total_return),
-        SUM(x.total_sale) - SUM(x.total_return)
-    FROM (
-        SELECT 
-            a.pay_mode_id, 
-            SUM(a.pay_amt) AS total_sale, 
-            0 AS total_return
-        FROM t_invoice_pay_det a
-        JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
-        WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
+    $stmt->bind_param(
+        "ssssssssssss",
+        $from_user,
+        $to_user,
+        $user_id_filter,
+        $from_user,
+        $to_user,
+        $user_id_filter,
+        $from_user,
+        $to_user,
+        $user_id_filter,
+        $from_user,
+        $to_user,
+        $user_id_filter
+    );
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    // 👉 OVERALL QUERY (all users)
+    $stmt = $branch_db->prepare("
+        SELECT CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
+               SUM(x.total_sale) AS total_sale,
+               SUM(x.total_return) AS total_return,
+               SUM(x.total_sale) - SUM(x.total_return) AS net_total
+        FROM (
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
+
+            UNION ALL
+
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
+        ) x
+        GROUP BY x.pay_mode_id
 
         UNION ALL
+        SELECT 'TOTAL' AS pay_mode_id,
+               SUM(x.total_sale), SUM(x.total_return),
+               SUM(x.total_sale) - SUM(x.total_return)
+        FROM (
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
 
-        SELECT 
-            a.pay_mode_id, 
-            0 AS total_sale, 
-            SUM(a.pay_amt) AS total_return
-        FROM t_sr_pay_det a
-        JOIN t_sr_hdr b ON a.sr_no = b.sr_no
-        WHERE DATE(b.sr_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
-    ) x
-");
+            UNION ALL
+
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
+        ) x
+    ");
+
+    $stmt->bind_param("ssssssss", $from_user, $to_user, $from_user, $to_user, $from_user, $to_user, $from_user, $to_user);
+    $stmt->execute();
+    $result = $stmt->get_result();
+}
 
 $stmt->bind_param("ssssssss", $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to);
 $stmt->execute();
@@ -354,14 +424,42 @@ while ($row = $supp_stmt->fetch_assoc()) {
         </div>
         <div></div>
         <!-- PAYMENT MODE WISE SALE SUMMARY UI -->
-        <!-- <div class="row g-3 mb-4"> -->
+        <!-- PAYMENT MODE WISE SALE SUMMARY UI -->
         <div class="card shadow-sm mt-4">
             <div class="p-3 bg-white shadow-sm rounded text-center">
+
                 <div class="row g-3 mb-4 justify-content-center">
                     <div class="col-auto text-center">
                         <h5 class="m-0">PAYMENT MODE WISE SALE SUMMARY</h5>
                     </div>
                 </div>
+
+                <!-- Filter Form -->
+                <form method="get" class="row g-3 mb-3 justify-content-center">
+                    <div class="col-md-3">
+                        <label>User</label>
+                        <select name="user_id" class="form-select">
+                            <option value="">-- All Users --</option>
+                            <?php foreach ($suppliers as $u): ?>
+                                <option value="<?= $u['user_id'] ?>" <?= (($_GET['user_id'] ?? '') == $u['user_id']) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($u['user_name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label>From</label>
+                        <input type="date" name="from_user" value="<?= htmlspecialchars($_GET['from_user'] ?? '') ?>" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label>To</label>
+                        <input type="date" name="to_user" value="<?= htmlspecialchars($_GET['to_user'] ?? '') ?>" class="form-control">
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button type="submit" class="btn btn-primary w-100">Filter</button>
+                    </div>
+                </form>
+
                 <div class="table-responsive mt-3">
                     <table class="table table-bordered table-hover">
                         <thead class="table-light">
@@ -374,8 +472,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
                         </thead>
                         <tbody>
                             <?php while ($row = $result->fetch_assoc()) {
-                                $isTotalRow = $row['pay_mode_id'] === 'TOTAL';
-                            ?>
+                                $isTotalRow = $row['pay_mode_id'] === 'TOTAL'; ?>
                                 <tr>
                                     <td><strong><?php echo htmlspecialchars($row['pay_mode_id']); ?></strong></td>
                                     <td style="<?php echo $isTotalRow ? 'background-color: #d4edda; color: #155724; font-weight: bold;' : ''; ?>">
@@ -392,6 +489,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
                         </tbody>
                     </table>
                 </div>
+
             </div>
         </div>
         <!-- USER WIISE PAYMODE SALE SUMMARY -->
