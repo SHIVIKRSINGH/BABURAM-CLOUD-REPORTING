@@ -151,8 +151,8 @@ if ($user_id_filter) {
         UNION ALL
         -- Totals row
         SELECT 'TOTAL' AS pay_mode_id,
-               SUM(x.total_sale), SUM(x.total_return),
-               SUM(x.total_sale) - SUM(x.total_return)
+               coalesce(SUM(x.total_sale),0), coalesce(SUM(x.total_return),0),
+               coalesce(SUM(x.total_sale) - SUM(x.total_return),0)
         FROM (
             SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
             FROM t_invoice_pay_det a
