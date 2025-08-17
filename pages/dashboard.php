@@ -195,9 +195,9 @@ if ($user_id_filter) {
     // 👉 OVERALL QUERY (all users)
     $stmt = $branch_db->prepare("
         SELECT CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
-               SUM(x.total_sale) AS total_sale,
-               SUM(x.total_return) AS total_return,
-               SUM(x.total_sale) - SUM(x.total_return) AS net_total
+               coalesce(SUM(x.total_sale),0) AS total_sale,
+               coalesce(SUM(x.total_return),0) AS total_return,
+               coalesce(SUM(x.total_sale) - SUM(x.total_return),0) AS net_total
         FROM (
             SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
             FROM t_invoice_pay_det a
