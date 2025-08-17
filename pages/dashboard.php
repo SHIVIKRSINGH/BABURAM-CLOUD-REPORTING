@@ -481,6 +481,11 @@ while ($row = $supp_stmt->fetch_assoc()) {
                                     <td style="<?php echo $isTotalRow ? 'background-color: #e6f4ea; color: #1e4620; font-weight: bold;' : ''; ?>">
                                         <?php echo number_format($row['net_total'], 2); ?>
                                     </td>
+                                    <td>
+                                        <a href="user_invoice_view.php?invoice_no=<?= urlencode($row['pay_mode_id']) ?>&user_id=<?= urlencode($row['pay_mode_id']) ?>&from_user=<?= urlencode($row['pay_mode_id']) ?>&to_user=<?= urlencode($row['pay_mode_id']) ?>" class="btn btn-sm btn-outline-primary" title="View Invoice Details">
+                                            🔍 View
+                                        </a>
+                                    </td>
                                 </tr>
                             <?php } ?>
                         </tbody>
