@@ -241,9 +241,6 @@ if ($user_id_filter) {
     $result = $stmt->get_result();
 }
 
-$stmt->bind_param("ssssssss", $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to);
-$stmt->execute();
-$result = $stmt->get_result();
 
 // Prepare and execute the updated USER payment mode-wise sale vs return query
 $stmt = $branch_db->prepare("
