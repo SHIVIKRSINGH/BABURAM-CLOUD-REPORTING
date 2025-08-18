@@ -60,7 +60,7 @@ $result = $stmt->get_result();
 
 $invoices_by_mode = [];
 while ($row = $result->fetch_assoc()) {
-    $mode = $row['pay_mode_id'] ?: 'UNKNOWN';
+    $mode = strtoupper($row['pay_mode_id'] ?: 'UNKNOWN');
     $invoices_by_mode[$mode][] = $row;
 }
 $stmt->close();
