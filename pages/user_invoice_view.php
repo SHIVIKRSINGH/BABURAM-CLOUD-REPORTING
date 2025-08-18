@@ -54,7 +54,7 @@ $query = "
 ";
 
 $stmt = $branch_db->prepare($query);
-$stmt->bind_param("sssss", $user_id, $user_id, $from_date, $to_date, $pay_mode);
+$stmt->bind_param("ssss", $user_id, $user_id, $from_date, $to_date);
 $stmt->execute();
 $result = $stmt->get_result();
 
@@ -82,10 +82,14 @@ $stmt->close();
 
         <!-- Nav Tabs -->
         <ul class="nav nav-tabs" id="invoiceTabs" role="tablist">
-            <?php $first = true;
-            foreach ($invoices_by_mode as $mode => $rows): ?>
+            <?php
+            $active_mode = $_GET['pay_mode_id'] ?? '';
+            $first = true;
+            foreach ($invoices_by_mode as $mode => $rows):
+                $isActive = ($active_mode && $active_mode === $mode) || (!$active_mode && $first);
+            ?>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link <?= $first ? 'active' : '' ?>" id="tab-<?= $mode ?>"
+                    <button class="nav-link <?= $isActive ? 'active' : '' ?>" id="tab-<?= $mode ?>"
                         data-bs-toggle="tab" data-bs-target="#content-<?= $mode ?>" type="button" role="tab">
                         <?= htmlspecialchars($mode) ?> (<?= count($rows) ?>)
                     </button>
@@ -96,9 +100,13 @@ $stmt->close();
 
         <!-- Tab Contents -->
         <div class="tab-content mt-3">
-            <?php $first = true;
-            foreach ($invoices_by_mode as $mode => $rows): ?>
-                <div class="tab-pane fade <?= $first ? 'show active' : '' ?>" id="content-<?= $mode ?>" role="tabpanel">
+            <?php
+            $active_mode = $_GET['pay_mode_id'] ?? '';
+            $first = true;
+            foreach ($invoices_by_mode as $mode => $rows):
+                $isActive = ($active_mode && $active_mode === $mode) || (!$active_mode && $first);
+            ?>
+                <div class="tab-pane fade <?= $isActive ? 'show active' : '' ?>" id="content-<?= $mode ?>" role="tabpanel">
                     <div class="card shadow-sm">
                         <div class="card-body">
                             <h5 class="mb-3">Payment Mode: <?= htmlspecialchars($mode) ?></h5>
