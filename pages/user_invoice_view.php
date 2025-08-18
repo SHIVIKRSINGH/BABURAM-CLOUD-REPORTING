@@ -122,6 +122,11 @@ $stmt->close();
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <?php 
+                                        $total_amount = 0;
+                                        foreach ($rows as $row): 
+                                            $total_amount += $row['net_amt_after_disc'];
+                                        ?>
                                         <?php foreach ($rows as $row): ?>
                                             <tr class="text-center">
                                                 <td><?= htmlspecialchars($row['invoice_no']) ?></td>
@@ -132,6 +137,13 @@ $stmt->close();
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
+                                    <tfoot class="table-secondary fw-bold text-center">
+                                        <tr>
+                                            <td colspan="3">TOTAL</td>
+                                            <td><?= number_format($total_amount, 2) ?></td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             </div>
                         </div>
