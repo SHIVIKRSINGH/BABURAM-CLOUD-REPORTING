@@ -119,6 +119,7 @@ $stmt->close();
                                             <th>Bill Time</th>
                                             <th>Amount (₹)</th>
                                             <th>Entered By</th>
+                                            <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -133,6 +134,11 @@ $stmt->close();
                                                 <td><?= htmlspecialchars($row['bill_time']) ?></td>
                                                 <td><?= number_format($row['net_amt_after_disc'], 2) ?></td>
                                                 <td><?= htmlspecialchars($row['ent_by']) ?></td>
+                                                <td>
+                                                    <a href="invoice_items_view.php?invoice_no=<?= urlencode($row['invoice_no']) ?>" class="btn btn-sm btn-outline-primary" title="View Invoice Details">
+                                                        🔍 View
+                                                    </a>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
