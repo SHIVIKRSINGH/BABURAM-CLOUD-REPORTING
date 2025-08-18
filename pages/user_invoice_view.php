@@ -122,12 +122,11 @@ $stmt->close();
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php 
+                                        <?php
                                         $total_amount = 0;
-                                        foreach ($rows as $row): 
+                                        foreach ($rows as $row):
                                             $total_amount += $row['net_amt_after_disc'];
                                         ?>
-                                        <?php foreach ($rows as $row): ?>
                                             <tr class="text-center">
                                                 <td><?= htmlspecialchars($row['invoice_no']) ?></td>
                                                 <td><?= htmlspecialchars($row['invoice_date']) ?></td>
