@@ -465,6 +465,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
                                 <th>Total Sale</th>
                                 <th>Total Sale Return</th>
                                 <th>Net Total</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -482,7 +483,9 @@ while ($row = $supp_stmt->fetch_assoc()) {
                                         <?php echo number_format($row['net_total'], 2); ?>
                                     </td>
                                     <td>
-                                        <a href="user_invoice_view.php?invoice_no=<?= urlencode($row['pay_mode_id']) ?>&user_id=<?= urlencode($row['pay_mode_id']) ?>&from_user=<?= urlencode($row['pay_mode_id']) ?>&to_user=<?= urlencode($row['pay_mode_id']) ?>" class="btn btn-sm btn-outline-primary" title="View Invoice Details">
+                                        <a href="user_invoice_view.php?user_id=<?= urlencode($row['ent_by']) ?>&pay_mode_id=<?= urlencode($row['pay_mode_id']) ?>&from_date=<?= urlencode($from_user) ?>&to_date=<?= urlencode($to_user) ?>"
+                                            class="btn btn-sm btn-outline-primary"
+                                            title="View Invoice Details">
                                             🔍 View
                                         </a>
                                     </td>
