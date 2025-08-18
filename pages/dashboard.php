@@ -484,7 +484,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
                                     </td>
                                     <td>
                                         <?php if ($row['pay_mode_id'] !== 'TOTAL'): ?>
-                                            <a href="user_invoice_view.php?user_id=<?= urlencode($user_id_filter ?: 'all') ?>&pay_mode_id=<?= urlencode($row['pay_mode_id']) ?>&from_date=<?= urlencode($from_user) ?>&to_date=<?= urlencode($to_user) ?>"
+                                            <a href="user_invoice_view.php?user_id=<?= urlencode($user_id_filter ?: '') ?>&pay_mode_id=<?= urlencode($row['pay_mode_id']) ?>&from_date=<?= urlencode($from_user) ?>&to_date=<?= urlencode($to_user) ?>"
                                                 class="btn btn-sm btn-outline-primary"
                                                 title="View Invoice Details">
                                                 🔍 View
