@@ -360,6 +360,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
     <title>Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 
     <!-- Autocomplete Script -->
     <script>
@@ -681,12 +682,27 @@ while ($row = $supp_stmt->fetch_assoc()) {
                             borderColor: 'rgba(255, 99, 132, 1)',
                             yAxisID: 'y1',
                             fill: false,
-                            tension: 0.1
+                            tension: 0.1,
+                            datalabels: { // ✨ Show cumulative % above red line
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: value => value + '%',
+                                color: 'red',
+                                font: {
+                                    weight: 'bold',
+                                    size: 11
+                                }
+                            }
                         }
                     ]
                 },
                 options: {
                     responsive: true,
+                    plugins: {
+                        datalabels: {
+                            display: false // disable for bars
+                        }
+                    },
                     scales: {
                         y: {
                             beginAtZero: true,
@@ -706,7 +722,8 @@ while ($row = $supp_stmt->fetch_assoc()) {
                             }
                         }
                     }
-                }
+                },
+                plugins: [ChartDataLabels] // ✨ enable plugin
             });
         }
 
