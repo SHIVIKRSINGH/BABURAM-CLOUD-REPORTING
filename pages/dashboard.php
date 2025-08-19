@@ -109,6 +109,22 @@ $total_returns = $summary['total_returns'];
 $invoice_count = $summary['invoice_count'];
 $net_total = $total_sales - $total_returns;
 
+$stmt = $branch_db->prepare("
+    SELECT g.group_id, g.group_desc,
+           COALESCE(SUM(d.net_amt),0) AS total_sale
+    FROM t_invoice_det d
+    JOIN m_item_hdr i ON d.item_id = i.item_id
+    JOIN m_group g ON i.group_id = g.group_id
+    JOIN t_invoice_hdr h ON d.invoice_no = h.invoice_no
+    WHERE DATE(h.invoice_dt) BETWEEN ? AND ?
+    GROUP BY g.group_id, g.group_desc
+    ORDER BY total_sale DESC
+");
+$stmt->bind_param("ss", $summary_from, $summary_to);
+$stmt->execute();
+$res_cats = $stmt->get_result();
+
+
 // PAYMENT MODE DATA
 
 // ===================================================================
@@ -419,6 +435,24 @@ while ($row = $supp_stmt->fetch_assoc()) {
                 <canvas id="chart"></canvas>
             </div>
         </div>
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <h5 class="mb-0">Top Categories (Pareto)</h5>
+                    <div>
+                        <label class="me-2 fw-bold">Show Top:</label>
+                        <select id="topNSelect" class="form-select form-select-sm d-inline-block" style="width: 100px;">
+                            <option value="5">Top 5</option>
+                            <option value="10" selected>Top 10</option>
+                            <option value="15">Top 15</option>
+                            <option value="20">Top 20</option>
+                        </select>
+                    </div>
+                </div>
+                <canvas id="paretoChart"></canvas>
+            </div>
+        </div>
+
         <div></div>
         <!-- PAYMENT MODE WISE SALE SUMMARY UI -->
         <!-- PAYMENT MODE WISE SALE SUMMARY UI -->
@@ -588,6 +622,95 @@ while ($row = $supp_stmt->fetch_assoc()) {
                 }
             }
         });
+    </script>
+    let paretoChart;
+    let allCategories = [];
+    let totalSales = 0;
+
+    // Fetch category data (AJAX)
+    function loadParetoData(from, to, topN = 10) {
+    fetch(`pareto_data.php?from=${from}&to=${to}`)
+    .then(res => res.json())
+    .then(data => {
+    allCategories = data.categories;
+    totalSales = data.totalSales;
+    buildPareto(topN);
+    });
+    }
+
+    // Build Pareto Chart
+    function buildPareto(topN = 10) {
+    const sortedCats = [...allCategories].sort((a, b) => b.total_sale - a.total_sale);
+    const topCats = sortedCats.slice(0, topN);
+    const others = sortedCats.slice(topN);
+
+    const othersTotal = others.reduce((sum, c) => sum + c.total_sale, 0);
+    if (othersTotal > 0) {
+    topCats.push({ group_desc: "Others", total_sale: othersTotal });
+    }
+
+    const labels = topCats.map(c => c.group_desc);
+    const sales = topCats.map(c => c.total_sale);
+
+    let running = 0;
+    const cumValues = sales.map(sale => {
+    running += sale;
+    return ((running / totalSales) * 100).toFixed(2);
+    });
+
+    if (paretoChart) paretoChart.destroy();
+
+    const ctx = document.getElementById('paretoChart').getContext('2d');
+    paretoChart = new Chart(ctx, {
+    data: {
+    labels: labels,
+    datasets: [
+    {
+    type: 'bar',
+    label: 'Sales (₹)',
+    data: sales,
+    backgroundColor: 'rgba(54, 162, 235, 0.7)'
+    },
+    {
+    type: 'line',
+    label: 'Cumulative %',
+    data: cumValues,
+    borderColor: 'rgba(255, 99, 132, 1)',
+    yAxisID: 'y1',
+    fill: false,
+    tension: 0.1
+    }
+    ]
+    },
+    options: {
+    responsive: true,
+    scales: {
+    y: {
+    beginAtZero: true,
+    ticks: { callback: val => '₹ ' + val }
+    },
+    y1: {
+    position: 'right',
+    beginAtZero: true,
+    max: 100,
+    ticks: { callback: val => val + '%' },
+    grid: { drawOnChartArea: false }
+    }
+    }
+    }
+    });
+    }
+
+    // Dropdown change
+    document.getElementById('topNSelect').addEventListener('change', function() {
+    buildPareto(parseInt(this.value));
+    });
+
+    // 🚀 Initial load (same date filter as dashboard)
+    const fromDate = document.getElementById('summary_from').value || '2025-08-01';
+    const toDate = document.getElementById('summary_to').value || '2025-08-19';
+
+    loadParetoData(fromDate, toDate, 10);
     </script>
 </body>
 
