@@ -622,8 +622,8 @@ while ($row = $supp_stmt->fetch_assoc()) {
                 }
             }
         });
-    </script>
-    <script>
+
+        // ===== Pareto Chart (Top Categories) =====
         let paretoChart;
         let allCategories = [];
         let totalSales = 0;
@@ -715,12 +715,19 @@ while ($row = $supp_stmt->fetch_assoc()) {
             buildPareto(parseInt(this.value));
         });
 
-        // 🚀 Initial load (same date filter as dashboard)
+        // 🔗 Link with Filter button
+        document.getElementById('summary_filter').addEventListener('click', function() {
+            const fromDate = document.getElementById('summary_from').value;
+            const toDate = document.getElementById('summary_to').value;
+            loadParetoData(fromDate, toDate, parseInt(document.getElementById('topNSelect').value));
+        });
+
+        // 🚀 Initial load (default range from inputs or fallback)
         const fromDate = document.getElementById('summary_from').value || '2025-08-01';
         const toDate = document.getElementById('summary_to').value || '2025-08-19';
-
         loadParetoData(fromDate, toDate, 10);
     </script>
+
 </body>
 
 </html>
