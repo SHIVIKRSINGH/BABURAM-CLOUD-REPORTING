@@ -9,7 +9,7 @@ error_reporting(E_ALL);
 // Default date range
 $from = $_GET['from'] ?? date('Y-m-d');
 $to = $_GET['to'] ?? date('Y-m-d');
-$branch = $_GET['branch'] ?? 'SHASHI-ND'; // ✅ Default Branch
+$branch = $_GET['branch'] ?? 'IND'; // ✅ Default Branch
 $role_name       = $_SESSION['role_name'];
 $session_branch  = $_SESSION['branch_id'] ?? '';
 $selected_branch = $_GET['branch'] ?? ($_SESSION['selected_branch_id'] ?? $session_branch);
