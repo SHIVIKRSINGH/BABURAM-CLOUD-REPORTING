@@ -77,7 +77,7 @@ SELECT A.item_id,
        SUM(IFNULL(A.net_amt,0)) AS pur_amt
 FROM t_receipt_det A
 JOIN t_receipt_hdr B ON A.receipt_no = B.receipt_no
-WHERE Date(B.receipt_dt) BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') AND STR_TO_DATE('$to', '%Y-%m-%d')
+WHERE Date(B.receipt_date) BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') AND STR_TO_DATE('$to', '%Y-%m-%d')
 GROUP BY A.item_id;
 
 /* Now aggregate item-level results up to group level */
