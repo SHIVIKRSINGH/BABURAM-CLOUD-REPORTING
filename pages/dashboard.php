@@ -58,6 +58,39 @@ $stmt->bind_param("ss", $chart_from, $chart_to);
 $stmt->execute();
 $res_sales = $stmt->get_result();
 
+// 🔹 Hourly Sales (within selected date range)
+$stmt = $branch_db->prepare("
+    SELECT 
+        HOUR(bill_time) AS hour,
+        COALESCE(SUM(net_amt_after_disc), 0) AS total_sale
+    FROM t_invoice_hdr
+    WHERE DATE(invoice_dt) BETWEEN ? AND ?
+    GROUP BY HOUR(bill_time)
+    ORDER BY HOUR(bill_time)
+");
+$stmt->bind_param("ss", $chart_from, $chart_to);
+$stmt->execute();
+$res_hourly = $stmt->get_result();
+
+$hour_labels = [];
+$hour_sales = [];
+
+// Initialize hours 00–23
+for ($h = 0; $h < 24; $h++) {
+    $hour_labels[] = sprintf("%02d:00", $h);
+    $hour_sales[$h] = 0;
+}
+
+// Fill query results
+while ($row = $res_hourly->fetch_assoc()) {
+    $hour = (int)$row['hour'];
+    $hour_sales[$hour] = $row['total_sale'];
+}
+
+$hour_sales_data = array_values($hour_sales);
+
+
+
 // 🔸 Returns
 $stmt = $branch_db->prepare("
     SELECT DATE(sr_dt) AS date, coalesce(SUM(net_amt),0) AS total_return
@@ -438,19 +471,14 @@ while ($row = $supp_stmt->fetch_assoc()) {
         </div>
         <div class="card shadow-sm mt-4">
             <div class="card-body">
-                <div class="d-flex justify-content-between mb-2">
-                    <h5 class="mb-0">Top Categories (Pareto)</h5>
-                    <div>
-                        <label class="me-2 fw-bold">Show Top:</label>
-                        <select id="topNSelect" class="form-select form-select-sm d-inline-block" style="width: 100px;">
-                            <option value="5">Top 5</option>
-                            <option value="10" selected>Top 10</option>
-                            <option value="15">Top 15</option>
-                            <option value="20">Top 20</option>
-                        </select>
-                    </div>
-                </div>
-                <canvas id="paretoChart"></canvas>
+                <h5 class="text-center mb-3">Hourly Sales (<?= htmlspecialchars($from ?: $today) ?><?= ($to && $to !== $from) ? " to " . htmlspecialchars($to) : '' ?>)</h5>
+                <canvas id="hourly_chart"></canvas>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <canvas id="group_chart"></canvas>
             </div>
         </div>
 
@@ -624,125 +652,89 @@ while ($row = $supp_stmt->fetch_assoc()) {
             }
         });
 
-        // ===== Pareto Chart (Top Categories) =====
-        let paretoChart;
-        let allCategories = [];
-        let totalSales = 0;
-
-        // Fetch category data (AJAX)
-        function loadParetoData(from, to, topN = 10) {
-            fetch(`pareto_data.php?from=${from}&to=${to}`)
-                .then(res => res.json())
-                .then(data => {
-                    allCategories = data.categories;
-                    totalSales = data.totalSales;
-                    buildPareto(topN);
-                });
-        }
-
-        // Build Pareto Chart
-        function buildPareto(topN = 10) {
-            const sortedCats = [...allCategories].sort((a, b) => b.total_sale - a.total_sale);
-            const topCats = sortedCats.slice(0, topN);
-            const others = sortedCats.slice(topN);
-
-            const othersTotal = others.reduce((sum, c) => sum + c.total_sale, 0);
-            if (othersTotal > 0) {
-                topCats.push({
-                    group_desc: "Others",
-                    total_sale: othersTotal
-                });
-            }
-
-            const labels = topCats.map(c => c.group_desc);
-            const sales = topCats.map(c => c.total_sale);
-
-            let running = 0;
-            const cumValues = sales.map(sale => {
-                running += sale;
-                return ((running / totalSales) * 100).toFixed(2);
-            });
-
-            if (paretoChart) paretoChart.destroy();
-
-            const ctx = document.getElementById('paretoChart').getContext('2d');
-            paretoChart = new Chart(ctx, {
-                data: {
-                    labels: labels,
-                    datasets: [{
-                            type: 'bar',
-                            label: 'Sales (₹)',
-                            data: sales,
-                            backgroundColor: 'rgba(54, 162, 235, 0.7)'
-                        },
-                        {
-                            type: 'line',
-                            label: 'Cumulative %',
-                            data: cumValues,
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            yAxisID: 'y1',
-                            fill: false,
-                            tension: 0.1,
-                            datalabels: { // ✨ Show cumulative % above red line
-                                align: 'top',
-                                anchor: 'end',
-                                formatter: value => value + '%',
-                                color: 'red',
-                                font: {
-                                    weight: 'bold',
-                                    size: 11
-                                }
-                            }
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        datalabels: {
-                            display: false // disable for bars
-                        }
+        // ===== Chart (Top Categories) =====
+        const ctx1 = document.getElementById('group_chart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: <?= json_encode($labels) ?>,
+                datasets: [{
+                        label: 'Net Sales (₹)',
+                        data: <?= json_encode($salesData) ?>,
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)'
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: val => '₹ ' + val
-                            }
-                        },
-                        y1: {
-                            position: 'right',
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: {
-                                callback: val => val + '%'
-                            },
-                            grid: {
-                                drawOnChartArea: false
-                            }
+                    {
+                        label: 'Sale Returns (₹)',
+                        data: <?= json_encode($returnsData) ?>,
+                        backgroundColor: 'rgba(255, 99, 132, 0.8)'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => '₹ ' + ctx.formattedValue
                         }
                     }
                 },
-                plugins: [ChartDataLabels] // ✨ enable plugin
-            });
-        }
-
-        // Dropdown change
-        document.getElementById('topNSelect').addEventListener('change', function() {
-            buildPareto(parseInt(this.value));
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: value => '₹ ' + value
+                        }
+                    }
+                }
+            }
         });
 
-        // 🔗 Link with Filter button
-        document.getElementById('summary_filter').addEventListener('click', function() {
-            const fromDate = document.getElementById('summary_from').value;
-            const toDate = document.getElementById('summary_to').value;
-            loadParetoData(fromDate, toDate, parseInt(document.getElementById('topNSelect').value));
+        // ===== Hourly Sales Chart =====
+        const ctx2 = document.getElementById('hourly_chart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: <?= json_encode($hour_labels) ?>,
+                datasets: [{
+                    label: 'Hourly Sales (₹)',
+                    data: <?= json_encode($hour_sales_data) ?>,
+                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => '₹ ' + ctx.formattedValue
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Hour of the Day'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Sales (₹)'
+                        },
+                        ticks: {
+                            callback: value => '₹ ' + value
+                        }
+                    }
+                }
+            }
         });
-
-        // 🚀 Initial load (default range from inputs or fallback)
-        const fromDate = document.getElementById('summary_from').value || '2025-08-01';
-        const toDate = document.getElementById('summary_to').value || '2025-08-19';
-        loadParetoData(fromDate, toDate, 10);
     </script>
 
 </body>

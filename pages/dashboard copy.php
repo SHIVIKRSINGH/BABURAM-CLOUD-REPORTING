@@ -49,7 +49,7 @@ $branch_db->query("SET time_zone = '+05:30'");
 
 // 🔸 Sales
 $stmt = $branch_db->prepare("
-    SELECT DATE(invoice_dt) AS date, SUM(net_amt_after_disc) AS total_sale
+    SELECT DATE(invoice_dt) AS date, coalesce(SUM(net_amt_after_disc),0) AS total_sale
     FROM t_invoice_hdr
     WHERE DATE(invoice_dt) BETWEEN ? AND ?
     GROUP BY DATE(invoice_dt)
@@ -60,7 +60,7 @@ $res_sales = $stmt->get_result();
 
 // 🔸 Returns
 $stmt = $branch_db->prepare("
-    SELECT DATE(sr_dt) AS date, SUM(net_amt) AS total_return
+    SELECT DATE(sr_dt) AS date, coalesce(SUM(net_amt),0) AS total_return
     FROM t_sr_hdr
     WHERE DATE(sr_dt) BETWEEN ? AND ?
     GROUP BY DATE(sr_dt)
@@ -109,71 +109,154 @@ $total_returns = $summary['total_returns'];
 $invoice_count = $summary['invoice_count'];
 $net_total = $total_sales - $total_returns;
 
+$stmt = $branch_db->prepare("
+    SELECT g.group_id, g.group_desc,
+           COALESCE(SUM(d.net_amt),0) AS total_sale
+    FROM t_invoice_det d
+    JOIN m_item_hdr i ON d.item_id = i.item_id
+    JOIN m_group g ON i.group_id = g.group_id
+    JOIN t_invoice_hdr h ON d.invoice_no = h.invoice_no
+    WHERE DATE(h.invoice_dt) BETWEEN ? AND ?
+    GROUP BY g.group_id, g.group_desc
+    ORDER BY total_sale DESC
+");
+$stmt->bind_param("ss", $summary_from, $summary_to);
+$stmt->execute();
+$res_cats = $stmt->get_result();
+
+
 // PAYMENT MODE DATA
 
-// Prepare and execute the updated payment mode-wise sale vs return query
-$stmt = $branch_db->prepare("
-    SELECT 
-        CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
-        SUM(x.total_sale) AS total_sale,
-        SUM(x.total_return) AS total_return,
-        SUM(x.total_sale) - SUM(x.total_return) AS net_total
-    FROM (
-        SELECT 
-            a.pay_mode_id, 
-            SUM(a.pay_amt) AS total_sale, 
-            0 AS total_return
-        FROM t_invoice_pay_det a
-        JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
-        WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
+// ===================================================================
+// PAYMENT MODE DATA (user/date filters supported)
+// ===================================================================
+$user_id_filter = $_GET['user_id'] ?? '';
+$from_user = $_GET['from_user'] ?? $summary_from;
+$to_user   = $_GET['to_user'] ?? $summary_to;
+
+if ($user_id_filter) {
+    // 👉 USER-WISE QUERY
+    $stmt = $branch_db->prepare("
+        SELECT CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
+               COALESCE(SUM(x.total_sale), 0) AS total_sale,
+               COALESCE(SUM(x.total_return), 0) AS total_return,
+               COALESCE(SUM(x.total_sale) - SUM(x.total_return), 0) AS net_total
+        FROM (
+            -- Sales
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            JOIN m_user u ON b.cash_id = u.user_id
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ? 
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
+
+            UNION ALL
+
+            -- Returns
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            JOIN m_user u ON b.ent_by = u.user_id
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
+        ) x
+        GROUP BY x.pay_mode_id
 
         UNION ALL
+        -- Totals row
+        SELECT 'TOTAL' AS pay_mode_id,
+               coalesce(SUM(x.total_sale),0), coalesce(SUM(x.total_return),0),
+               coalesce(SUM(x.total_sale) - SUM(x.total_return),0)
+        FROM (
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            JOIN m_user u ON b.cash_id = u.user_id
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ? 
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
 
-        SELECT 
-            a.pay_mode_id, 
-            0 AS total_sale, 
-            SUM(a.pay_amt) AS total_return
-        FROM t_sr_pay_det a
-        JOIN t_sr_hdr b ON a.sr_no = b.sr_no
-        WHERE DATE(b.sr_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
-    ) x
-    GROUP BY x.pay_mode_id
+            UNION ALL
 
-    UNION ALL
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            JOIN m_user u ON b.ent_by = u.user_id
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+              AND u.user_id = ?
+            GROUP BY a.pay_mode_id
+        ) x
+    ");
 
-    SELECT 
-        'TOTAL' AS pay_mode_id,
-        SUM(x.total_sale),
-        SUM(x.total_return),
-        SUM(x.total_sale) - SUM(x.total_return)
-    FROM (
-        SELECT 
-            a.pay_mode_id, 
-            SUM(a.pay_amt) AS total_sale, 
-            0 AS total_return
-        FROM t_invoice_pay_det a
-        JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
-        WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
+    $stmt->bind_param(
+        "ssssssssssss",
+        $from_user,
+        $to_user,
+        $user_id_filter,
+        $from_user,
+        $to_user,
+        $user_id_filter,
+        $from_user,
+        $to_user,
+        $user_id_filter,
+        $from_user,
+        $to_user,
+        $user_id_filter
+    );
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    // 👉 OVERALL QUERY (all users)
+    $stmt = $branch_db->prepare("
+        SELECT CAST(x.pay_mode_id AS CHAR) AS pay_mode_id,
+               coalesce(SUM(x.total_sale),0) AS total_sale,
+               coalesce(SUM(x.total_return),0) AS total_return,
+               coalesce(SUM(x.total_sale) - SUM(x.total_return),0) AS net_total
+        FROM (
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
+
+            UNION ALL
+
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
+        ) x
+        GROUP BY x.pay_mode_id
 
         UNION ALL
+        SELECT 'TOTAL' AS pay_mode_id,
+               SUM(x.total_sale), SUM(x.total_return),
+               SUM(x.total_sale) - SUM(x.total_return)
+        FROM (
+            SELECT a.pay_mode_id, SUM(a.pay_amt) AS total_sale, 0 AS total_return
+            FROM t_invoice_pay_det a
+            JOIN t_invoice_hdr b ON a.invoice_no = b.invoice_no
+            WHERE DATE(b.invoice_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
 
-        SELECT 
-            a.pay_mode_id, 
-            0 AS total_sale, 
-            SUM(a.pay_amt) AS total_return
-        FROM t_sr_pay_det a
-        JOIN t_sr_hdr b ON a.sr_no = b.sr_no
-        WHERE DATE(b.sr_dt) BETWEEN ? AND ?
-        GROUP BY a.pay_mode_id
-    ) x
-");
+            UNION ALL
 
-$stmt->bind_param("ssssssss", $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to, $summary_from, $summary_to);
-$stmt->execute();
-$result = $stmt->get_result();
+            SELECT a.pay_mode_id, 0 AS total_sale, SUM(a.pay_amt) AS total_return
+            FROM t_sr_pay_det a
+            JOIN t_sr_hdr b ON a.sr_no = b.sr_no
+            WHERE DATE(b.sr_dt) BETWEEN ? AND ?
+            GROUP BY a.pay_mode_id
+        ) x
+    ");
+
+    $stmt->bind_param("ssssssss", $from_user, $to_user, $from_user, $to_user, $from_user, $to_user, $from_user, $to_user);
+    $stmt->execute();
+    $result = $stmt->get_result();
+}
+
 
 // Prepare and execute the updated USER payment mode-wise sale vs return query
 $stmt = $branch_db->prepare("
@@ -277,6 +360,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
     <title>Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 
     <!-- Autocomplete Script -->
     <script>
@@ -352,16 +436,62 @@ while ($row = $supp_stmt->fetch_assoc()) {
                 <canvas id="chart"></canvas>
             </div>
         </div>
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <h5 class="mb-0">Top Categories (Pareto)</h5>
+                    <div>
+                        <label class="me-2 fw-bold">Show Top:</label>
+                        <select id="topNSelect" class="form-select form-select-sm d-inline-block" style="width: 100px;">
+                            <option value="5">Top 5</option>
+                            <option value="10" selected>Top 10</option>
+                            <option value="15">Top 15</option>
+                            <option value="20">Top 20</option>
+                        </select>
+                    </div>
+                </div>
+                <canvas id="paretoChart"></canvas>
+            </div>
+        </div>
+
         <div></div>
         <!-- PAYMENT MODE WISE SALE SUMMARY UI -->
-        <!-- <div class="row g-3 mb-4"> -->
+        <!-- PAYMENT MODE WISE SALE SUMMARY UI -->
         <div class="card shadow-sm mt-4">
             <div class="p-3 bg-white shadow-sm rounded text-center">
+
                 <div class="row g-3 mb-4 justify-content-center">
                     <div class="col-auto text-center">
                         <h5 class="m-0">PAYMENT MODE WISE SALE SUMMARY</h5>
                     </div>
                 </div>
+
+                <!-- Filter Form -->
+                <form method="get" class="row g-3 mb-3 justify-content-center">
+                    <div class="col-md-3">
+                        <label>User</label>
+                        <select name="user_id" class="form-select">
+                            <option value="">-- All Users --</option>
+                            <?php foreach ($suppliers as $u): ?>
+                                <option value="<?= $u['user_id'] ?>" <?= (($_GET['user_id'] ?? '') == $u['user_id']) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($u['user_name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label>From</label>
+                        <input type="date" name="from_user" value="<?= htmlspecialchars($_GET['from_user'] ?? '') ?>" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label>To</label>
+                        <input type="date" name="to_user" value="<?= htmlspecialchars($_GET['to_user'] ?? '') ?>" class="form-control">
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button type="submit" class="btn btn-primary w-100">Filter</button>
+                    </div>
+                </form>
+
                 <div class="table-responsive mt-3">
                     <table class="table table-bordered table-hover">
                         <thead class="table-light">
@@ -370,12 +500,12 @@ while ($row = $supp_stmt->fetch_assoc()) {
                                 <th>Total Sale</th>
                                 <th>Total Sale Return</th>
                                 <th>Net Total</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php while ($row = $result->fetch_assoc()) {
-                                $isTotalRow = $row['pay_mode_id'] === 'TOTAL';
-                            ?>
+                                $isTotalRow = $row['pay_mode_id'] === 'TOTAL'; ?>
                                 <tr>
                                     <td><strong><?php echo htmlspecialchars($row['pay_mode_id']); ?></strong></td>
                                     <td style="<?php echo $isTotalRow ? 'background-color: #d4edda; color: #155724; font-weight: bold;' : ''; ?>">
@@ -387,11 +517,21 @@ while ($row = $supp_stmt->fetch_assoc()) {
                                     <td style="<?php echo $isTotalRow ? 'background-color: #e6f4ea; color: #1e4620; font-weight: bold;' : ''; ?>">
                                         <?php echo number_format($row['net_total'], 2); ?>
                                     </td>
+                                    <td>
+                                        <?php if ($row['pay_mode_id'] !== 'TOTAL'): ?>
+                                            <a href="user_invoice_view.php?user_id=<?= urlencode($user_id_filter ?: 'all') ?>&pay_mode_id=<?= urlencode($row['pay_mode_id']) ?>&from_date=<?= urlencode($from_user) ?>&to_date=<?= urlencode($to_user) ?>"
+                                                class="btn btn-sm btn-outline-primary"
+                                                title="View Invoice Details">
+                                                🔍 View
+                                            </a>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php } ?>
                         </tbody>
                     </table>
                 </div>
+
             </div>
         </div>
         <!-- USER WIISE PAYMODE SALE SUMMARY -->
@@ -483,7 +623,128 @@ while ($row = $supp_stmt->fetch_assoc()) {
                 }
             }
         });
+
+        // ===== Pareto Chart (Top Categories) =====
+        let paretoChart;
+        let allCategories = [];
+        let totalSales = 0;
+
+        // Fetch category data (AJAX)
+        function loadParetoData(from, to, topN = 10) {
+            fetch(`pareto_data.php?from=${from}&to=${to}`)
+                .then(res => res.json())
+                .then(data => {
+                    allCategories = data.categories;
+                    totalSales = data.totalSales;
+                    buildPareto(topN);
+                });
+        }
+
+        // Build Pareto Chart
+        function buildPareto(topN = 10) {
+            const sortedCats = [...allCategories].sort((a, b) => b.total_sale - a.total_sale);
+            const topCats = sortedCats.slice(0, topN);
+            const others = sortedCats.slice(topN);
+
+            const othersTotal = others.reduce((sum, c) => sum + c.total_sale, 0);
+            if (othersTotal > 0) {
+                topCats.push({
+                    group_desc: "Others",
+                    total_sale: othersTotal
+                });
+            }
+
+            const labels = topCats.map(c => c.group_desc);
+            const sales = topCats.map(c => c.total_sale);
+
+            let running = 0;
+            const cumValues = sales.map(sale => {
+                running += sale;
+                return ((running / totalSales) * 100).toFixed(2);
+            });
+
+            if (paretoChart) paretoChart.destroy();
+
+            const ctx = document.getElementById('paretoChart').getContext('2d');
+            paretoChart = new Chart(ctx, {
+                data: {
+                    labels: labels,
+                    datasets: [{
+                            type: 'bar',
+                            label: 'Sales (₹)',
+                            data: sales,
+                            backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                        },
+                        {
+                            type: 'line',
+                            label: 'Cumulative %',
+                            data: cumValues,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            yAxisID: 'y1',
+                            fill: false,
+                            tension: 0.1,
+                            datalabels: { // ✨ Show cumulative % above red line
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: value => value + '%',
+                                color: 'red',
+                                font: {
+                                    weight: 'bold',
+                                    size: 11
+                                }
+                            }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        datalabels: {
+                            display: false // disable for bars
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: val => '₹ ' + val
+                            }
+                        },
+                        y1: {
+                            position: 'right',
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: val => val + '%'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels] // ✨ enable plugin
+            });
+        }
+
+        // Dropdown change
+        document.getElementById('topNSelect').addEventListener('change', function() {
+            buildPareto(parseInt(this.value));
+        });
+
+        // 🔗 Link with Filter button
+        document.getElementById('summary_filter').addEventListener('click', function() {
+            const fromDate = document.getElementById('summary_from').value;
+            const toDate = document.getElementById('summary_to').value;
+            loadParetoData(fromDate, toDate, parseInt(document.getElementById('topNSelect').value));
+        });
+
+        // 🚀 Initial load (default range from inputs or fallback)
+        const fromDate = document.getElementById('summary_from').value || '2025-08-01';
+        const toDate = document.getElementById('summary_to').value || '2025-08-19';
+        loadParetoData(fromDate, toDate, 10);
     </script>
+
 </body>
 
 </html>
