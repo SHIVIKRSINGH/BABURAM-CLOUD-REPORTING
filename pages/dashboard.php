@@ -478,6 +478,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
 
         <div class="card shadow-sm">
             <div class="card-body">
+                <h5 class="text-center mb-3">Top Categories by Sales</h5>
                 <canvas id="group_chart"></canvas>
             </div>
         </div>
@@ -613,6 +614,15 @@ while ($row = $supp_stmt->fetch_assoc()) {
         </div> -->
     </div>
     <!-- </div> -->
+    <?php
+    $cat_labels = [];
+    $cat_sales = [];
+
+    while ($row = $res_cats->fetch_assoc()) {
+        $cat_labels[] = $row['group_desc'];
+        $cat_sales[] = $row['total_sale'];
+    }
+    ?>
 
     <script>
         const ctx = document.getElementById('chart').getContext('2d');
@@ -657,18 +667,12 @@ while ($row = $supp_stmt->fetch_assoc()) {
         new Chart(ctx1, {
             type: 'bar',
             data: {
-                labels: <?= json_encode($labels) ?>,
+                labels: <?= json_encode($cat_labels) ?>,
                 datasets: [{
-                        label: 'Net Sales (₹)',
-                        data: <?= json_encode($salesData) ?>,
-                        backgroundColor: 'rgba(75, 192, 192, 0.8)'
-                    },
-                    {
-                        label: 'Sale Returns (₹)',
-                        data: <?= json_encode($returnsData) ?>,
-                        backgroundColor: 'rgba(255, 99, 132, 0.8)'
-                    }
-                ]
+                    label: 'Category-wise Sales (₹)',
+                    data: <?= json_encode($cat_sales) ?>,
+                    backgroundColor: 'rgba(153, 102, 255, 0.8)'
+                }]
             },
             options: {
                 responsive: true,
@@ -677,11 +681,24 @@ while ($row = $supp_stmt->fetch_assoc()) {
                         callbacks: {
                             label: ctx => '₹ ' + ctx.formattedValue
                         }
+                    },
+                    legend: {
+                        display: false
                     }
                 },
                 scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Category'
+                        }
+                    },
                     y: {
                         beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Sales (₹)'
+                        },
                         ticks: {
                             callback: value => '₹ ' + value
                         }
@@ -689,6 +706,7 @@ while ($row = $supp_stmt->fetch_assoc()) {
                 }
             }
         });
+
 
         // ===== Hourly Sales Chart =====
         const ctx2 = document.getElementById('hourly_chart').getContext('2d');
