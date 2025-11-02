@@ -5,9 +5,9 @@ include "../includes/header.php";
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Default date range
-$from = $_GET['from'] ?? date('Y-m-d');
-$to   = $_GET['to'] ?? date('Y-m-d');
+// Get date filters
+$from = $_GET['from'] ?? '';
+$to   = $_GET['to'] ?? date('Y-m-d'); // only to-date defaults to today
 
 $role_name       = $_SESSION['role_name'];
 $session_branch  = $_SESSION['branch_id'] ?? '';
@@ -47,8 +47,14 @@ $from = $branch_db->real_escape_string($from);
 $to   = $branch_db->real_escape_string($to);
 
 // ========================
-// STOCK REPORT QUERY
+// 📊 STOCK REPORT QUERY
 // ========================
+
+// Dynamic date filter condition
+$dateFilter = $from
+    ? "BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')"
+    : "<= STR_TO_DATE('$to','%Y-%m-%d')";
+
 $query = "
 CREATE TEMPORARY TABLE tmpStocks (
     item_id VARCHAR(30),
@@ -75,7 +81,7 @@ CREATE TEMPORARY TABLE tmpPur AS
 SELECT B.item_id, SUM(IFNULL(B.qty,0)) AS pur_qty
 FROM t_receipt_hdr A
 JOIN t_receipt_det B ON A.receipt_id = B.receipt_id
-WHERE A.receipt_date BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
+WHERE A.receipt_date $dateFilter
 GROUP BY B.item_id;
 
 UPDATE tmpStocks S
@@ -87,7 +93,7 @@ CREATE TEMPORARY TABLE tmpPurRet AS
 SELECT B.item_id, SUM(IFNULL(B.qty,0)) AS pur_ret_qty
 FROM t_pur_ret_hdr A
 JOIN t_pur_ret_det B ON A.ret_no = B.ret_no
-WHERE A.ret_dt BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
+WHERE A.ret_dt $dateFilter
 GROUP BY B.item_id;
 
 UPDATE tmpStocks S
@@ -99,7 +105,7 @@ CREATE TEMPORARY TABLE tmpSale AS
 SELECT B.item_id, SUM(IFNULL(B.qty,0)) AS sale_qty
 FROM t_invoice_hdr A
 JOIN t_invoice_det B ON A.invoice_no = B.invoice_no
-WHERE A.invoice_dt BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
+WHERE A.invoice_dt $dateFilter
 GROUP BY B.item_id;
 
 UPDATE tmpStocks S
@@ -111,7 +117,7 @@ CREATE TEMPORARY TABLE tmpSaleRet AS
 SELECT B.item_id, SUM(IFNULL(B.qty,0)) AS sale_ret_qty
 FROM t_sr_hdr A
 JOIN t_sr_det B ON A.sr_no = B.sr_no
-WHERE A.sr_dt BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
+WHERE A.sr_dt $dateFilter
 GROUP BY B.item_id;
 
 UPDATE tmpStocks S
@@ -123,7 +129,7 @@ CREATE TEMPORARY TABLE tmpTransIn AS
 SELECT B.item_id, SUM(IFNULL(B.qty_in,0)) AS tran_in_qty
 FROM t_trans_in_hdr A
 JOIN t_trans_in_det B ON A.trans_in_no = B.trans_in_no
-WHERE A.trans_in_dt BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
+WHERE A.trans_in_dt $dateFilter
 GROUP BY B.item_id;
 
 UPDATE tmpStocks S
@@ -135,7 +141,7 @@ CREATE TEMPORARY TABLE tmpTransOut AS
 SELECT B.item_id, SUM(IFNULL(B.qty_out,0)) AS tran_out_qty
 FROM t_trans_out_hdr A
 JOIN t_trans_out_det B ON A.trans_out_no = B.trans_out_no
-WHERE A.trans_out_dt BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
+WHERE A.trans_out_dt $dateFilter
 GROUP BY B.item_id;
 
 UPDATE tmpStocks S
