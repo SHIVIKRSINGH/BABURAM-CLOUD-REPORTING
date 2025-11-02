@@ -53,7 +53,7 @@ $to   = $branch_db->real_escape_string($to);
 // ========================
 $query = "
 CREATE TEMPORARY TABLE tmpStocks (
-    item_id INT,
+    item_id VARCHAR(30),
     item_desc VARCHAR(255),
     op_bal DECIMAL(18,4) DEFAULT 0,
     pur_qty DECIMAL(18,4) DEFAULT 0,
