@@ -5,19 +5,14 @@ include "../includes/header.php";
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// 🔧 Default date range & search/pagination parameters
-$from   = $_GET['from'] ?? date('Y-m-d');
-$to     = $_GET['to'] ?? date('Y-m-d');
-$search = $_GET['search'] ?? '';
-$page   = max(1, (int)($_GET['page'] ?? 1));
-$limit  = 50; // number of rows per page
-$offset = ($page - 1) * $limit;
+// Default date range
+$from = $_GET['from'] ?? date('Y-m-d');
+$to   = $_GET['to'] ?? date('Y-m-d');
 
 $role_name       = $_SESSION['role_name'];
 $session_branch  = $_SESSION['branch_id'] ?? '';
 $selected_branch = $_GET['branch'] ?? ($_SESSION['selected_branch_id'] ?? $session_branch);
 
-// Totals
 $invoices = [];
 $totals = [
     'op_bal' => 0,
@@ -50,7 +45,6 @@ $branch_db->query("SET time_zone = '+05:30'");
 
 $from = $branch_db->real_escape_string($from);
 $to   = $branch_db->real_escape_string($to);
-$search_sql = $branch_db->real_escape_string($search);
 
 // ========================
 // STOCK REPORT QUERY
@@ -154,7 +148,7 @@ UPDATE tmpStocks SET cl_bal = IFNULL(op_bal,0)
     - IFNULL(sale_qty,0) + IFNULL(sale_ret_qty,0)
     + IFNULL(tran_in_qty,0) - IFNULL(tran_out_qty,0);
 
--- ✅ Final report with search & pagination
+-- ✅ Final report
 SELECT 
     item_id, item_desc, op_bal, pur_qty, pur_ret_qty, tran_in_qty, tran_out_qty,
     sale_qty, sale_ret_qty, cl_bal,
@@ -163,14 +157,11 @@ SELECT
     ROUND(cl_bal * sale_price, 2) AS sale_value
 FROM tmpStocks
 WHERE cl_bal <> 0
-" . ($search ? "AND (item_id LIKE '%$search_sql%' OR item_desc LIKE '%$search_sql%')" : "") . "
-ORDER BY item_id
-LIMIT $limit OFFSET $offset;
+ORDER BY item_id;
 
 DROP TEMPORARY TABLE IF EXISTS tmpStocks, tmpPur, tmpPurRet, tmpSale, tmpSaleRet, tmpTransIn, tmpTransOut;
 ";
 
-$total_rows = 0;
 if ($branch_db->multi_query($query)) {
     do {
         if ($result = $branch_db->store_result()) {
@@ -184,16 +175,6 @@ if ($branch_db->multi_query($query)) {
         }
     } while ($branch_db->more_results() && $branch_db->next_result());
 }
-
-// Count total items (for pagination)
-$countQuery = "SELECT COUNT(*) AS cnt FROM m_item_hdr WHERE item_id IN (
-    SELECT item_id FROM (
-        SELECT item_id FROM t_invoice_det GROUP BY item_id
-    ) X
-)";
-$resCount = $branch_db->query($countQuery);
-$total_rows = $resCount->fetch_assoc()['cnt'] ?? 0;
-$total_pages = ceil($total_rows / $limit);
 ?>
 
 <!DOCTYPE html>
@@ -203,6 +184,7 @@ $total_pages = ceil($total_rows / $limit);
     <meta charset="UTF-8">
     <title>Stock Report</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
@@ -210,26 +192,22 @@ $total_pages = ceil($total_rows / $limit);
         <h2 class="mb-4">Stock Report</h2>
 
         <form method="get" class="row g-3 mb-4">
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <label>From Date</label>
                 <input type="date" class="form-control" name="from" value="<?= htmlspecialchars($from) ?>">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <label>To Date</label>
                 <input type="date" class="form-control" name="to" value="<?= htmlspecialchars($to) ?>">
             </div>
-            <div class="col-md-3">
-                <label>Search (Item ID / Name)</label>
-                <input type="text" class="form-control" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search item...">
-            </div>
-            <div class="col-md-2 align-self-end">
+            <div class="col-md-3 align-self-end">
                 <button type="submit" class="btn btn-primary">Search</button>
             </div>
         </form>
 
-        <table class="table table-bordered table-striped">
+        <table id="invoiceTable" class="table table-bordered table-striped">
             <thead>
-                <tr class="table-primary">
+                <tr>
                     <th>Item ID</th>
                     <th>Item Name</th>
                     <th>Opening</th>
@@ -260,22 +238,32 @@ $total_pages = ceil($total_rows / $limit);
             </tbody>
         </table>
 
-        <!-- Pagination -->
-        <nav>
-            <ul class="pagination justify-content-center">
-                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                    <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                        <a class="page-link" href="?from=<?= $from ?>&to=<?= $to ?>&search=<?= urlencode($search) ?>&page=<?= $i ?>">
-                            <?= $i ?>
-                        </a>
-                    </li>
-                <?php endfor; ?>
+        <div class="mt-4">
+            <h5>Grand Totals (All Records):</h5>
+            <ul>
+                <li><strong>Opening Total:</strong> <?= number_format($totals['op_bal'], 2) ?></li>
+                <li><strong>Purchase Total:</strong> <?= number_format($totals['pur_qty'], 2) ?></li>
+                <li><strong>Sale Total:</strong> <?= number_format($totals['sale_qty'], 2) ?></li>
+                <li><strong>Closing Total:</strong> <?= number_format($totals['cl_bal'], 2) ?></li>
             </ul>
-        </nav>
-
-        <h5 class="mt-3">Totals (Current Page):</h5>
-        <p>Closing Balance Total: <?= number_format($totals['cl_bal'], 2) ?></p>
+        </div>
     </div>
+
+    <!-- ✅ DataTables -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#invoiceTable').DataTable({
+                pageLength: 25,
+                ordering: true,
+                searching: true,
+                lengthChange: true
+            });
+        });
+    </script>
+
 </body>
 
 </html>
