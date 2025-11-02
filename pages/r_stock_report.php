@@ -62,8 +62,6 @@ CREATE TEMPORARY TABLE tmpStocks (
     tran_out_qty DECIMAL(18,4) DEFAULT 0,
     sale_qty DECIMAL(18,4) DEFAULT 0,
     sale_ret_qty DECIMAL(18,4) DEFAULT 0,
-    prod_qty DECIMAL(18,4) DEFAULT 0,
-    rm_consum_qty DECIMAL(18,4) DEFAULT 0,
     cl_bal DECIMAL(18,4) DEFAULT 0,
     cost_price DECIMAL(18,4) DEFAULT 0,
     sale_price DECIMAL(18,4) DEFAULT 0
@@ -73,7 +71,6 @@ INSERT INTO tmpStocks (item_id, item_desc, op_bal, cost_price, sale_price)
 SELECT 
     item_id, item_desc, IFNULL(op_bal_unit,0), IFNULL(cost_price,0), IFNULL(sale_price,0)
 FROM m_item_hdr;
-
 
 -- ✅ Purchase
 CREATE TEMPORARY TABLE tmpPur AS
@@ -147,40 +144,16 @@ UPDATE tmpStocks S
 JOIN tmpTransOut P ON S.item_id = P.item_id
 SET S.tran_out_qty = P.tran_out_qty;
 
--- ✅ Production
-CREATE TEMPORARY TABLE tmpProd AS
-SELECT A.item_id, SUM(IFNULL(A.qty,0)) AS prod_qty
-FROM t_prod_entry_det A
-WHERE A.prod_entry_date BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
-GROUP BY A.item_id;
-
-UPDATE tmpStocks S
-JOIN tmpProd P ON S.item_id = P.item_id
-SET S.prod_qty = P.prod_qty;
-
--- ✅ Raw Material Consumption
-CREATE TEMPORARY TABLE tmpRM AS
-SELECT B.item_id, SUM(IFNULL(A.qty,0) * IFNULL(B.qty,0)) AS rm_consum_qty
-FROM t_prod_entry_det A
-JOIN m_gift_item_det B ON A.item_id = B.gitem_id
-WHERE A.prod_entry_date BETWEEN STR_TO_DATE('$from','%Y-%m-%d') AND STR_TO_DATE('$to','%Y-%m-%d')
-GROUP BY B.item_id;
-
-UPDATE tmpStocks S
-JOIN tmpRM P ON S.item_id = P.item_id
-SET S.rm_consum_qty = P.rm_consum_qty;
-
 -- ✅ Final stock balance
 UPDATE tmpStocks SET cl_bal = IFNULL(op_bal,0)
     + IFNULL(pur_qty,0) - IFNULL(pur_ret_qty,0)
     - IFNULL(sale_qty,0) + IFNULL(sale_ret_qty,0)
-    + IFNULL(tran_in_qty,0) - IFNULL(tran_out_qty,0)
-    + IFNULL(prod_qty,0) - IFNULL(rm_consum_qty,0);
+    + IFNULL(tran_in_qty,0) - IFNULL(tran_out_qty,0);
 
 -- ✅ Final report
 SELECT 
     item_id, item_desc, op_bal, pur_qty, pur_ret_qty, tran_in_qty, tran_out_qty,
-    sale_qty, sale_ret_qty, prod_qty, rm_consum_qty, cl_bal,
+    sale_qty, sale_ret_qty, cl_bal,
     cost_price, sale_price,
     ROUND(cl_bal * cost_price, 2) AS cost_value,
     ROUND(cl_bal * sale_price, 2) AS sale_value
@@ -188,7 +161,7 @@ FROM tmpStocks
 WHERE cl_bal <> 0
 ORDER BY item_id;
 
-DROP TEMPORARY TABLE IF EXISTS tmpStocks, tmpPur, tmpPurRet, tmpSale, tmpSaleRet, tmpTransIn, tmpTransOut, tmpProd, tmpRM;
+DROP TEMPORARY TABLE IF EXISTS tmpStocks, tmpPur, tmpPurRet, tmpSale, tmpSaleRet, tmpTransIn, tmpTransOut;
 ";
 
 if ($branch_db->multi_query($query)) {
@@ -196,7 +169,7 @@ if ($branch_db->multi_query($query)) {
         if ($result = $branch_db->store_result()) {
             while ($row = $result->fetch_assoc()) {
                 $invoices[] = $row;
-                foreach (['op_bal', 'pur_qty', 'pur_ret_qty', 'tran_in_qty', 'tran_out_qty', 'sale_qty', 'sale_ret_qty', 'prod_qty', 'rm_consum_qty', 'cl_bal'] as $field) {
+                foreach (['op_bal', 'pur_qty', 'pur_ret_qty', 'tran_in_qty', 'tran_out_qty', 'sale_qty', 'sale_ret_qty', 'cl_bal'] as $field) {
                     $totals[$field] += $row[$field];
                 }
             }
@@ -245,8 +218,6 @@ if ($branch_db->multi_query($query)) {
                     <th>Sale Return</th>
                     <th>Transfer In</th>
                     <th>Transfer Out</th>
-                    <th>Production</th>
-                    <th>Consumption</th>
                     <th>Closing</th>
                 </tr>
             </thead>
@@ -262,8 +233,6 @@ if ($branch_db->multi_query($query)) {
                         <td><?= number_format($row['sale_ret_qty'], 2) ?></td>
                         <td><?= number_format($row['tran_in_qty'], 2) ?></td>
                         <td><?= number_format($row['tran_out_qty'], 2) ?></td>
-                        <td><?= number_format($row['prod_qty'], 2) ?></td>
-                        <td><?= number_format($row['rm_consum_qty'], 2) ?></td>
                         <td><?= number_format($row['cl_bal'], 2) ?></td>
                     </tr>
                 <?php endforeach; ?>
