@@ -52,23 +52,28 @@ $to   = $branch_db->real_escape_string($to);
 // STOCK REPORT QUERY
 // ========================
 $query = "
-CREATE TEMPORARY TABLE tmpStocks AS
+CREATE TEMPORARY TABLE tmpStocks (
+    item_id INT,
+    item_desc VARCHAR(255),
+    op_bal DECIMAL(18,4) DEFAULT 0,
+    pur_qty DECIMAL(18,4) DEFAULT 0,
+    pur_ret_qty DECIMAL(18,4) DEFAULT 0,
+    tran_in_qty DECIMAL(18,4) DEFAULT 0,
+    tran_out_qty DECIMAL(18,4) DEFAULT 0,
+    sale_qty DECIMAL(18,4) DEFAULT 0,
+    sale_ret_qty DECIMAL(18,4) DEFAULT 0,
+    prod_qty DECIMAL(18,4) DEFAULT 0,
+    rm_consum_qty DECIMAL(18,4) DEFAULT 0,
+    cl_bal DECIMAL(18,4) DEFAULT 0,
+    cost_price DECIMAL(18,4) DEFAULT 0,
+    sale_price DECIMAL(18,4) DEFAULT 0
+);
+
+INSERT INTO tmpStocks (item_id, item_desc, op_bal, cost_price, sale_price)
 SELECT 
-    A.item_id,
-    A.item_desc,
-    IFNULL(A.op_bal_unit,0) AS op_bal,
-    0.00 AS pur_qty,
-    0.00 AS pur_ret_qty,
-    0.00 AS tran_in_qty,
-    0.00 AS tran_out_qty,
-    0.00 AS sale_qty,
-    0.00 AS sale_ret_qty,
-    0.00 AS prod_qty,
-    0.00 AS rm_consum_qty,
-    0.00 AS cl_bal,
-    IFNULL(A.cost_price,0) AS cost_price,
-    IFNULL(A.sale_price,0) AS sale_price
-FROM m_item_hdr A;
+    item_id, item_desc, IFNULL(op_bal_unit,0), IFNULL(cost_price,0), IFNULL(sale_price,0)
+FROM m_item_hdr;
+
 
 -- ✅ Purchase
 CREATE TEMPORARY TABLE tmpPur AS
