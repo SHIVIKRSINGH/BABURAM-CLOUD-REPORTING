@@ -5,14 +5,19 @@ include "../includes/header.php";
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Default date range
-$from = $_GET['from'] ?? date('Y-m-d');
-$to   = $_GET['to'] ?? date('Y-m-d');
+// 🔧 Default date range & search/pagination parameters
+$from   = $_GET['from'] ?? date('Y-m-d');
+$to     = $_GET['to'] ?? date('Y-m-d');
+$search = $_GET['search'] ?? '';
+$page   = max(1, (int)($_GET['page'] ?? 1));
+$limit  = 50; // number of rows per page
+$offset = ($page - 1) * $limit;
 
 $role_name       = $_SESSION['role_name'];
 $session_branch  = $_SESSION['branch_id'] ?? '';
 $selected_branch = $_GET['branch'] ?? ($_SESSION['selected_branch_id'] ?? $session_branch);
 
+// Totals
 $invoices = [];
 $totals = [
     'op_bal' => 0,
@@ -22,8 +27,6 @@ $totals = [
     'tran_out_qty' => 0,
     'sale_qty' => 0,
     'sale_ret_qty' => 0,
-    'prod_qty' => 0,
-    'rm_consum_qty' => 0,
     'cl_bal' => 0
 ];
 
@@ -47,6 +50,7 @@ $branch_db->query("SET time_zone = '+05:30'");
 
 $from = $branch_db->real_escape_string($from);
 $to   = $branch_db->real_escape_string($to);
+$search_sql = $branch_db->real_escape_string($search);
 
 // ========================
 // STOCK REPORT QUERY
@@ -150,7 +154,7 @@ UPDATE tmpStocks SET cl_bal = IFNULL(op_bal,0)
     - IFNULL(sale_qty,0) + IFNULL(sale_ret_qty,0)
     + IFNULL(tran_in_qty,0) - IFNULL(tran_out_qty,0);
 
--- ✅ Final report
+-- ✅ Final report with search & pagination
 SELECT 
     item_id, item_desc, op_bal, pur_qty, pur_ret_qty, tran_in_qty, tran_out_qty,
     sale_qty, sale_ret_qty, cl_bal,
@@ -159,11 +163,14 @@ SELECT
     ROUND(cl_bal * sale_price, 2) AS sale_value
 FROM tmpStocks
 WHERE cl_bal <> 0
-ORDER BY item_id;
+" . ($search ? "AND (item_id LIKE '%$search_sql%' OR item_desc LIKE '%$search_sql%')" : "") . "
+ORDER BY item_id
+LIMIT $limit OFFSET $offset;
 
 DROP TEMPORARY TABLE IF EXISTS tmpStocks, tmpPur, tmpPurRet, tmpSale, tmpSaleRet, tmpTransIn, tmpTransOut;
 ";
 
+$total_rows = 0;
 if ($branch_db->multi_query($query)) {
     do {
         if ($result = $branch_db->store_result()) {
@@ -177,6 +184,16 @@ if ($branch_db->multi_query($query)) {
         }
     } while ($branch_db->more_results() && $branch_db->next_result());
 }
+
+// Count total items (for pagination)
+$countQuery = "SELECT COUNT(*) AS cnt FROM m_item_hdr WHERE item_id IN (
+    SELECT item_id FROM (
+        SELECT item_id FROM t_invoice_det GROUP BY item_id
+    ) X
+)";
+$resCount = $branch_db->query($countQuery);
+$total_rows = $resCount->fetch_assoc()['cnt'] ?? 0;
+$total_pages = ceil($total_rows / $limit);
 ?>
 
 <!DOCTYPE html>
@@ -193,22 +210,26 @@ if ($branch_db->multi_query($query)) {
         <h2 class="mb-4">Stock Report</h2>
 
         <form method="get" class="row g-3 mb-4">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label>From Date</label>
                 <input type="date" class="form-control" name="from" value="<?= htmlspecialchars($from) ?>">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label>To Date</label>
                 <input type="date" class="form-control" name="to" value="<?= htmlspecialchars($to) ?>">
             </div>
-            <div class="col-md-3 align-self-end">
+            <div class="col-md-3">
+                <label>Search (Item ID / Name)</label>
+                <input type="text" class="form-control" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search item...">
+            </div>
+            <div class="col-md-2 align-self-end">
                 <button type="submit" class="btn btn-primary">Search</button>
             </div>
         </form>
 
         <table class="table table-bordered table-striped">
             <thead>
-                <tr>
+                <tr class="table-primary">
                     <th>Item ID</th>
                     <th>Item Name</th>
                     <th>Opening</th>
@@ -239,7 +260,20 @@ if ($branch_db->multi_query($query)) {
             </tbody>
         </table>
 
-        <h5 class="mt-3">Totals:</h5>
+        <!-- Pagination -->
+        <nav>
+            <ul class="pagination justify-content-center">
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                        <a class="page-link" href="?from=<?= $from ?>&to=<?= $to ?>&search=<?= urlencode($search) ?>&page=<?= $i ?>">
+                            <?= $i ?>
+                        </a>
+                    </li>
+                <?php endfor; ?>
+            </ul>
+        </nav>
+
+        <h5 class="mt-3">Totals (Current Page):</h5>
         <p>Closing Balance Total: <?= number_format($totals['cl_bal'], 2) ?></p>
     </div>
 </body>
