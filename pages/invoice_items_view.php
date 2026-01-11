@@ -40,13 +40,13 @@ if ($branch_db->connect_error) {
 $branch_db->set_charset('utf8mb4');
 $branch_db->query("SET time_zone = '+05:30'");
 
-// ==================== Fetch Invoice Header (for total) ====================
-$invoice_hdr = [];
-$stmt = $branch_db->prepare("SELECT invoice_no, net_amt_after_disc FROM t_invoice_hdr WHERE invoice_no = ?");
+// ==================== Fetch Invoice Header ====================
+$stmt = $branch_db->prepare(
+    "SELECT invoice_no, net_amt_after_disc FROM t_invoice_hdr WHERE invoice_no = ?"
+);
 $stmt->bind_param("s", $invoice_no);
 $stmt->execute();
-$result = $stmt->get_result();
-$invoice_hdr = $result->fetch_assoc();
+$invoice_hdr = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 // ==================== Fetch Invoice Item Details ====================
@@ -77,29 +77,28 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// Group items by item_id
+// Group items
 $grouped_items = [];
 foreach ($invoice_det as $row) {
-    $item_id = $row['item_id'];
-    if (!isset($grouped_items[$item_id])) {
-        $grouped_items[$item_id] = [
-            'item_id'    => $row['item_id'],
-            'item_name'  => $row['item_name'],
-            'qty'        => (float)$row['qty'],
-            'mrp'        => (float)$row['mrp'],
+    $id = $row['item_id'];
+    if (!isset($grouped_items[$id])) {
+        $grouped_items[$id] = [
+            'item_id' => $row['item_id'],
+            'item_name' => $row['item_name'],
+            'qty' => (float)$row['qty'],
+            'mrp' => (float)$row['mrp'],
             'sale_price' => (float)$row['sale_price'],
-            'disc_per'   => (float)$row['disc_per'],
-            'disc_amt'   => (float)$row['disc_amt'],
+            'disc_per' => (float)$row['disc_per'],
+            'disc_amt' => (float)$row['disc_amt'],
             'sale_tax_per' => (float)$row['sale_tax_per'],
             'sale_tax_amt' => (float)$row['sale_tax_amt'],
             'net_amt_total' => (float)$row['net_amt'],
-            'pur_rate'   => (float)$row['pur_rate'],
+            'pur_rate' => (float)$row['pur_rate'],
         ];
     } else {
-        $grouped_items[$item_id]['qty'] += (float)$row['qty'];
-        $grouped_items[$item_id]['disc_amt'] += (float)$row['disc_amt'];
-        $grouped_items[$item_id]['sale_tax_amt'] += (float)$row['sale_tax_amt'];
-        // keep net_amt_total as-is (do not sum)
+        $grouped_items[$id]['qty'] += (float)$row['qty'];
+        $grouped_items[$id]['disc_amt'] += (float)$row['disc_amt'];
+        $grouped_items[$id]['sale_tax_amt'] += (float)$row['sale_tax_amt'];
     }
 }
 $invoice_det_grouped = array_values($grouped_items);
@@ -107,15 +106,9 @@ $invoice_det_grouped = array_values($grouped_items);
 // ==================== Fetch Invoice Payment Details ====================
 $invoice_pay = [];
 $stmt = $branch_db->prepare("
-    SELECT 
-        p.invoice_no,
-        p.pay_mode_id,
-        p.pay_amt,
-        p.ref_amt,
-        p.bank_name,
-        p.cc_no
-    FROM t_invoice_pay_det p
-    WHERE p.invoice_no = ?
+    SELECT pay_mode_id, pay_amt, ref_amt, bank_name, cc_no
+    FROM t_invoice_pay_det
+    WHERE invoice_no = ?
 ");
 $stmt->bind_param("s", $invoice_no);
 $stmt->execute();
@@ -130,116 +123,156 @@ $stmt->close();
 <html>
 
 <head>
-    <title>Invoice #<?= htmlspecialchars($invoice_no) ?> - Details</title>
+    <title>Invoice #<?= htmlspecialchars($invoice_no) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            .table-responsive {
+                max-height: none !important;
+                overflow: visible !important;
+            }
+        }
+    </style>
 </head>
 
 <body class="bg-light">
-    <div class="container my-5">
+
+    <div class="container my-5" id="invoice-section">
+
+        <!-- Header & Buttons -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="mb-0">🧾 Invoice #<?= htmlspecialchars($invoice_no) ?></h3>
+            <h3>🧾 Invoice #<?= htmlspecialchars($invoice_no) ?></h3>
+            <div class="no-print">
+                <button class="btn btn-primary btn-sm" onclick="printInvoice()">🖨️ Print</button>
+                <button class="btn btn-danger btn-sm" onclick="downloadInvoicePDF()">📄 PDF</button>
+                <button class="btn btn-success btn-sm" onclick="exportInvoiceExcel()">📊 Excel</button>
+            </div>
         </div>
 
-        <!-- ==================== Invoice Items Table ==================== -->
+        <!-- ==================== Items ==================== -->
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <h5 class="card-title">📦 Invoice Item Details</h5>
+                <h5>📦 Invoice Item Details</h5>
                 <div class="table-responsive">
-                    <table class="table table-bordered table-striped table-hover">
+                    <table class="table table-bordered table-striped">
                         <thead class="table-dark text-center">
                             <tr>
-                                <th>Sl No.</th>
+                                <th>#</th>
                                 <th>Item Id</th>
                                 <th>Item Name</th>
                                 <th>Qty</th>
-                                <th>Mrp</th>
-                                <th>Sale Price</th>
-                                <th>Disc %</th>
+                                <th>MRP</th>
+                                <th>Sale</th>
+                                <th>Disc%</th>
                                 <th>Disc Amt</th>
-                                <th>Tax %</th>
+                                <th>Tax%</th>
                                 <th>Tax Amt</th>
                                 <th>Net Amt</th>
-                                <th>Pur. Rate</th>
+                                <th>Pur Rate</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (count($invoice_det_grouped) === 0): ?>
-                                <tr>
-                                    <td colspan="12" class="text-center text-muted">No Items Found</td>
+                            <?php $i = 1;
+                            foreach ($invoice_det_grouped as $r): ?>
+                                <tr class="text-center">
+                                    <td><?= $i++ ?></td>
+                                    <td><?= $r['item_id'] ?></td>
+                                    <td class="text-start"><?= $r['item_name'] ?></td>
+                                    <td><?= $r['qty'] ?></td>
+                                    <td><?= number_format($r['mrp'], 2) ?></td>
+                                    <td><?= number_format($r['sale_price'], 2) ?></td>
+                                    <td><?= number_format($r['disc_per'], 2) ?></td>
+                                    <td><?= number_format($r['disc_amt'], 2) ?></td>
+                                    <td><?= number_format($r['sale_tax_per'], 2) ?></td>
+                                    <td><?= number_format($r['sale_tax_amt'], 2) ?></td>
+                                    <td><?= number_format($r['net_amt_total'], 2) ?></td>
+                                    <td><?= number_format($r['pur_rate'], 2) ?></td>
                                 </tr>
-                            <?php else: ?>
-                                <?php $i = 1;
-                                foreach ($invoice_det_grouped as $row): ?>
-                                    <tr class="text-center">
-                                        <td><?= $i++ ?></td>
-                                        <td><?= htmlspecialchars($row['item_id']) ?></td>
-                                        <td class="text-start">
-                                            <?= htmlspecialchars($row['item_name']) ?><br>
-                                            <small class="text-muted">(per unit: <?= number_format($row['net_amt_total'] / max(1, $row['qty']), 2) ?>)</small>
-                                        </td>
-                                        <td><?= $row['qty'] ?></td>
-                                        <td><?= number_format($row['mrp'], 2) ?></td>
-                                        <td><?= number_format($row['sale_price'], 2) ?></td>
-                                        <td><?= number_format($row['disc_per'], 2) ?></td>
-                                        <td><?= number_format($row['disc_amt'], 2) ?></td>
-                                        <td><?= number_format($row['sale_tax_per'], 2) ?></td>
-                                        <td><?= number_format($row['sale_tax_amt'], 2) ?></td>
-                                        <td><?= number_format($row['net_amt_total'], 2) ?></td>
-                                        <td><?= number_format($row['pur_rate'], 2) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                <tr class="fw-bold text-end">
-                                    <td colspan="10">Grand Total</td>
-                                    <td><?= number_format($invoice_hdr['net_amt_after_disc'] ?? 0, 2) ?></td>
-                                    <td></td>
-                                </tr>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
+                            <tr class="fw-bold text-end">
+                                <td colspan="10">Grand Total</td>
+                                <td><?= number_format($invoice_hdr['net_amt_after_disc'], 2) ?></td>
+                                <td></td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- ==================== Invoice Payments Table ==================== -->
+        <!-- ==================== Payments ==================== -->
         <div class="card shadow-sm">
             <div class="card-body">
-                <h5 class="card-title">💳 Payment Details</h5>
+                <h5>💳 Payment Details</h5>
                 <div class="table-responsive">
-                    <table class="table table-bordered table-striped table-hover">
+                    <table class="table table-bordered table-striped">
                         <thead class="table-dark text-center">
                             <tr>
-                                <th>Sl No.</th>
-                                <th>Pay Mode</th>
-                                <th>Pay Amount</th>
-                                <th>Refund Amt</th>
-                                <th>Bank Name</th>
-                                <th>Card No.</th>
+                                <th>#</th>
+                                <th>Mode</th>
+                                <th>Amount</th>
+                                <th>Refund</th>
+                                <th>Bank</th>
+                                <th>Card No</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (count($invoice_pay) === 0): ?>
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted">No Payments Found</td>
+                            <?php $j = 1;
+                            foreach ($invoice_pay as $p): ?>
+                                <tr class="text-center">
+                                    <td><?= $j++ ?></td>
+                                    <td><?= $p['pay_mode_id'] ?></td>
+                                    <td><?= number_format($p['pay_amt'], 2) ?></td>
+                                    <td><?= $p['ref_amt'] ?></td>
+                                    <td><?= $p['bank_name'] ?></td>
+                                    <td><?= $p['cc_no'] ?></td>
                                 </tr>
-                            <?php else: ?>
-                                <?php $j = 1;
-                                foreach ($invoice_pay as $row): ?>
-                                    <tr class="text-center">
-                                        <td><?= $j++ ?></td>
-                                        <td><?= htmlspecialchars($row['pay_mode_id'] ?? '-') ?></td>
-                                        <td><?= number_format((float)($row['pay_amt'] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($row['ref_amt'] ?? '-') ?></td>
-                                        <td><?= htmlspecialchars($row['bank_name'] ?? '-') ?></td>
-                                        <td><?= htmlspecialchars($row['cc_no'] ?? '-') ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
+
     </div>
+
+    <!-- JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <script>
+        function printInvoice() {
+            window.print();
+        }
+
+        function downloadInvoicePDF() {
+            html2pdf().set({
+                filename: 'Invoice_<?= $invoice_no ?>.pdf',
+                margin: 0.5,
+                html2canvas: {
+                    scale: 2
+                },
+                jsPDF: {
+                    unit: 'in',
+                    format: 'a4'
+                }
+            }).from(document.getElementById('invoice-section')).save();
+        }
+
+        function exportInvoiceExcel() {
+            const wb = XLSX.utils.book_new();
+            document.querySelectorAll("table").forEach((t, i) => {
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(t), "Sheet" + (i + 1));
+            });
+            XLSX.writeFile(wb, 'Invoice_<?= $invoice_no ?>.xlsx');
+        }
+    </script>
+
 </body>
 
 </html>
