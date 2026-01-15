@@ -1,22 +1,20 @@
 <?php
-require_once "../includes/config.php"; // MySQLi config
+require_once "../includes/config.php";
 include "../includes/header.php";
 
-// Error reporting
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Default date range
+/* ---------------- Defaults ---------------- */
 $from = $_GET['from'] ?? date('Y-m-d');
-$to = $_GET['to'] ?? date('Y-m-d');
-$branch = $_GET['branch'] ?? 'IND'; // ✅ Default Branch
-$role_name       = $_SESSION['role_name'];
-$session_branch  = $_SESSION['branch_id'] ?? '';
-$selected_branch = $_GET['branch'] ?? ($_SESSION['selected_branch_id'] ?? $session_branch);
+$to   = $_GET['to']   ?? date('Y-m-d');
 
-// Fetch invoices
+$role_name      = $_SESSION['role_name'];
+$session_branch = $_SESSION['branch_id'] ?? '';
+$selected_branch = $_GET['branch'] ?? $session_branch;
+
+/* ---------------- Totals ---------------- */
 $invoices = [];
-$total = 0;
 $totals = [
     'item_qty' => 0,
     'item_amt' => 0,
@@ -29,15 +27,14 @@ $totals = [
     'margin_count' => 0
 ];
 
-// 🔌 Connect to branch DB dynamically
-$branch_db = null;
+/* ---------------- Branch DB ---------------- */
 $stmt = $con->prepare("SELECT * FROM m_branch_sync_config WHERE branch_id = ?");
 $stmt->bind_param("s", $selected_branch);
 $stmt->execute();
 $res = $stmt->get_result();
 
 if ($res->num_rows === 0) {
-    die("❌ Branch config not found for '$selected_branch'");
+    die("Branch config not found");
 }
 $config = $res->fetch_assoc();
 
@@ -47,95 +44,97 @@ $branch_db = new mysqli(
     $config['db_password'],
     $config['db_name']
 );
+
 if ($branch_db->connect_error) {
-    die("❌ Branch DB connection failed: " . $branch_db->connect_error);
+    die("Branch DB connection failed");
 }
+
 $branch_db->set_charset('utf8mb4');
 $branch_db->query("SET time_zone = '+05:30'");
 
 $from = $branch_db->real_escape_string($from);
 $to   = $branch_db->real_escape_string($to);
 
+/* ---------------- QUERY ---------------- */
 $query = "
-   CREATE TEMPORARY TABLE tmpSaleIt AS
-SELECT 
-    A.item_id, A.bar_code,
-    SUM(IFNULL(A.qty, 0)) AS item_qty,
+
+CREATE TEMPORARY TABLE tmpSaleIt AS
+SELECT
+    A.item_id,
+    SUM(IFNULL(A.qty,0)) AS item_qty,
     SUM(
-        (IFNULL(A.net_amt, 0) - ((IFNULL(A.net_amt, 0) * IFNULL(B.disc_per, 0)) / 100))
+        IFNULL(A.net_amt,0)
+        - ((IFNULL(A.net_amt,0) * IFNULL(B.disc_per,0)) / 100)
     ) AS item_amt,
-    SUM(IFNULL(A.qty, 0) * IFNULL(A.pur_rate, 0)) AS pur_amt
+    SUM(IFNULL(A.qty,0) * IFNULL(A.pur_rate,0)) AS pur_amt
 FROM t_invoice_det A
 JOIN t_invoice_hdr B ON A.invoice_no = B.invoice_no
-WHERE B.invoice_dt BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') 
-                      AND STR_TO_DATE('$to', '%Y-%m-%d')
-GROUP BY A.item_id, A.bar_code;
+WHERE B.invoice_dt BETWEEN STR_TO_DATE('$from','%Y-%m-%d')
+                        AND STR_TO_DATE('$to','%Y-%m-%d')
+GROUP BY A.item_id;
 
 CREATE TEMPORARY TABLE tmpSaleRetIt AS
-SELECT 
-    A.item_id, A.bar_code,
-    SUM(IFNULL(A.qty, 0)) AS item_ret_qty,
-    SUM(
-        (IFNULL(A.net_amt, 0) - ((IFNULL(A.net_amt, 0) * IFNULL(B.disc_per, 0)) / 100))
-    ) AS item_ret_amt,
-    SUM(IFNULL(A.qty, 0) * IFNULL(A.pur_rate, 0)) AS pur_ret_amt
+SELECT
+    A.item_id,
+    SUM(IFNULL(A.qty,0)) AS item_ret_qty,
+    SUM(IFNULL(A.net_amt,0)) AS item_ret_amt,
+    SUM(IFNULL(A.qty,0) * IFNULL(A.pur_rate,0)) AS pur_ret_amt
 FROM t_sr_det A
 JOIN t_sr_hdr B ON A.sr_no = B.sr_no
-WHERE B.sr_dt BETWEEN STR_TO_DATE('$from', '%Y-%m-%d') 
-                 AND STR_TO_DATE('$to', '%Y-%m-%d')
-GROUP BY A.item_id, A.bar_code;
+WHERE B.sr_dt BETWEEN STR_TO_DATE('$from','%Y-%m-%d')
+                   AND STR_TO_DATE('$to','%Y-%m-%d')
+GROUP BY A.item_id;
 
-SELECT 
-    I.item_id,
+SELECT
+    M.item_id,
     M.item_desc AS item_name,
-    IFNULL(S.item_qty, 0) AS item_qty,
-    IFNULL(S.item_amt, 0) AS item_amt,
-    IFNULL(R.item_ret_qty, 0) AS item_ret_qty,
-    IFNULL(R.item_ret_amt, 0) AS item_ret_amt,
-    (IFNULL(S.item_qty, 0) - IFNULL(R.item_ret_qty, 0)) AS net_qty,
-    (IFNULL(S.item_amt, 0) - IFNULL(R.item_ret_amt, 0)) AS net_amt,
-    IFNULL(M.sale_tax_paid, '') AS sale_tax_paid,
-    IFNULL(T.tax_per, 0) AS vat_per,
-    IFNULL(M.cost_price, 0) AS cost_price,
-    (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)) AS pur_amt,
+    IFNULL(S.item_qty,0) AS item_qty,
+    IFNULL(S.item_amt,0) AS item_amt,
+    IFNULL(R.item_ret_qty,0) AS item_ret_qty,
+    IFNULL(R.item_ret_amt,0) AS item_ret_amt,
+    (IFNULL(S.item_qty,0) - IFNULL(R.item_ret_qty,0)) AS net_qty,
+    (IFNULL(S.item_amt,0) - IFNULL(R.item_ret_amt,0)) AS net_amt,
+    IFNULL(M.cost_price,0) AS cost_price,
+    (IFNULL(S.pur_amt,0) - IFNULL(R.pur_ret_amt,0)) AS pur_amt,
     CASE
-        WHEN (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)) > 0 THEN
+        WHEN (IFNULL(S.pur_amt,0) - IFNULL(R.pur_ret_amt,0)) > 0 THEN
             ROUND(
-                ((IFNULL(S.item_amt, 0) - IFNULL(R.item_ret_amt, 0) 
-                  - (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0))) * 100) 
-                / (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)), 
-            2)
+                ((IFNULL(S.item_amt,0) - IFNULL(R.item_ret_amt,0)
+                - (IFNULL(S.pur_amt,0) - IFNULL(R.pur_ret_amt,0))) * 100)
+                / (IFNULL(S.pur_amt,0) - IFNULL(R.pur_ret_amt,0)), 2
+            )
         ELSE NULL
     END AS margin_percent
-FROM m_item_hdr I
-LEFT JOIN m_item_hdr M ON I.item_id = M.item_id
-LEFT JOIN tmpSaleIt S ON I.item_id = S.item_id
-LEFT JOIN tmpSaleRetIt R ON I.item_id = R.item_id
-LEFT JOIN m_tax_type T ON M.sale_tax_paid = T.tax_type_id
-WHERE (IFNULL(S.item_qty, 0) > 0 OR IFNULL(R.item_ret_qty, 0) > 0)
+FROM m_item_hdr M
+LEFT JOIN tmpSaleIt S ON M.item_id = S.item_id
+LEFT JOIN tmpSaleRetIt R ON M.item_id = R.item_id
+WHERE (IFNULL(S.item_qty,0) > 0 OR IFNULL(R.item_ret_qty,0) > 0)
   AND (
-        (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)) > 0
-        AND ROUND(
-            ((IFNULL(S.item_amt, 0) - IFNULL(R.item_ret_amt, 0) 
-              - (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0))) * 100) 
-            / (IFNULL(S.pur_amt, 0) - IFNULL(R.pur_ret_amt, 0)), 
-        2) < 0
+        (IFNULL(S.pur_amt,0) - IFNULL(R.pur_ret_amt,0)) > 0
+        AND
+        ROUND(
+            ((IFNULL(S.item_amt,0) - IFNULL(R.item_ret_amt,0)
+            - (IFNULL(S.pur_amt,0) - IFNULL(R.pur_ret_amt,0))) * 100)
+            / (IFNULL(S.pur_amt,0) - IFNULL(R.pur_ret_amt,0)), 2
+        ) < 0
       )
-ORDER BY I.item_id;
+ORDER BY M.item_id;
 
 DROP TEMPORARY TABLE IF EXISTS tmpSaleIt;
 DROP TEMPORARY TABLE IF EXISTS tmpSaleRetIt;
-
 ";
 
+/* ---------------- EXECUTE ---------------- */
 if ($branch_db->multi_query($query)) {
     do {
         if ($result = $branch_db->store_result()) {
             while ($row = $result->fetch_assoc()) {
                 $invoices[] = $row;
-                foreach (['item_qty', 'item_amt', 'item_ret_qty', 'item_ret_amt', 'net_qty', 'net_amt', 'pur_amt'] as $field) {
-                    $totals[$field] += $row[$field];
+
+                foreach (['item_qty','item_amt','item_ret_qty','item_ret_amt','net_qty','net_amt','pur_amt'] as $f) {
+                    $totals[$f] += $row[$f];
                 }
+
                 if (!is_null($row['margin_percent'])) {
                     $totals['margin_sum'] += $row['margin_percent'];
                     $totals['margin_count']++;
@@ -146,14 +145,16 @@ if ($branch_db->multi_query($query)) {
     } while ($branch_db->more_results() && $branch_db->next_result());
 }
 
-$average_margin = $totals['margin_count'] > 0 ? round($totals['margin_sum'] / $totals['margin_count'], 2) : 0;
+$average_margin = $totals['margin_count']
+    ? round($totals['margin_sum'] / $totals['margin_count'], 2)
+    : 0;
 
-// 🏢 Branch list
+/* ---------------- Branch List ---------------- */
 $branches = [];
 if (strtolower($role_name) === 'admin') {
     $res = $con->query("SELECT branch_id FROM m_branch_sync_config");
-    while ($row = $res->fetch_assoc()) {
-        $branches[] = $row['branch_id'];
+    while ($r = $res->fetch_assoc()) {
+        $branches[] = $r['branch_id'];
     }
 } else {
     $branches[] = $session_branch;
