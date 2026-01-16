@@ -46,7 +46,7 @@ if (isset($_SESSION['branch_db'])) {
     if ($role === 'admin') {
         // 🔹 Admin: Load all branches & set first one as default
         $branches = [];
-        $res = $con->query("SELECT * FROM m_branch_sync_config ORDER BY branch_id");
+        $res = $con->query("SELECT * FROM m_branch_sync_config where db_host!='' ORDER BY branch_id");
         while ($row = $res->fetch_assoc()) {
             $branches[] = $row;
         }
