@@ -25,7 +25,7 @@ $supp_id = $_GET['supp_id'] ?? '';
 
 // 🔌 Connect to branch DB dynamically
 $branch_db = null;
-$stmt = $con->prepare("SELECT * FROM m_branch_sync_config WHERE branch_id = ?");
+$stmt = $con->prepare("SELECT * FROM m_branch_sync_config where db_host!='' WHERE branch_id = ?");
 $stmt->bind_param("s", $selected_branch);
 $stmt->execute();
 $res = $stmt->get_result();
